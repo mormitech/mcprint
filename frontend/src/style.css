@@ -88,3 +88,4 @@ body.about-mode { display:block; } body.about-mode #side, body.about-mode main {
 h1 { display:flex; align-items:center; gap:9px; } .logo-sm { height:20px; width:auto; }
 .logo, .logo-sm { filter:none; }
 @media (prefers-color-scheme: dark) { .logo, .logo-sm { filter:invert(1); } }
+.state { display:flex; align-items:center; gap:10px; flex-wrap:wrap; } button.retry { padding:3px 12px; font-size:12px; }

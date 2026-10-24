@@ -151,6 +151,9 @@ func (a *App) capabilities(ctx context.Context, guid string) (*escl.Caps, error)
 	}
 	caps, err := c.Caps(ctx)
 	if err != nil {
+		if escl.Unreachable(err) {
+			return nil, errors.New("could not reach the scanner: is it switched on and on the same network?")
+		}
 		return nil, fmt.Errorf("could not read the scanner's capabilities: %w", err)
 	}
 	a.mu.Lock()

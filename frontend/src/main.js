@@ -28,6 +28,14 @@ let choices = null;           // what the selected scanner offers for the curren
 let opts = {source: '', duplex: false, dpi: 0, color: '', paper: 'a4'};
 let pages = [];
 let scan = {state: 'idle', message: ''};
+
+// Wails rejects with an Error whose text starts with "Error: "; show a plain sentence instead.
+const errText = (e) => {
+  const t = String(e?.message ?? e).replace(/^Error:\s*/, '');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+// An error the user can try again: retry is 'connect' (reading the scanner) or 'scan' (the scan itself).
+const fail = (e, retry) => ({state: 'error', message: errText(e), retry});
 let prefs = {last: '', devices: {}};
 let ready = false;            // the capabilities of the selected scanner were loaded
 
@@ -86,7 +94,7 @@ async function select(guid) {
   try {
     await loadChoices();
   } catch (e) {
-    if (selected === guid) { scan = {state: 'error', message: String(e)}; }
+    if (selected === guid) scan = fail(e, 'connect');
   }
   renderControls();
   savePrefs();
@@ -142,7 +150,7 @@ function renderControls() {
     form = '<p class="empty">Reading what the scanner can do…</p>';
   }
   const hint = !d.online && !busy ? '<div class="state error">This scanner is offline right now.</div>' : '';
-  const st = scan.message ? `<div class="state ${scan.state}">${esc(scan.message)}</div>` : '';
+  const st = scan.message ? `<div class="state ${scan.state}">${esc(scan.message)}${scan.state === 'error' && scan.retry ? ` <button id="retry" class="retry">${scan.retry === 'scan' ? 'Try again' : 'Reconnect'}</button>` : ''}</div>` : '';
   el.innerHTML = `<div class="row"><strong>${esc(d.name)}</strong><button id="info-btn" class="icon tip tip-left" data-tip="Scanner details" aria-label="Scanner details">i</button></div><div style="height:10px"></div>${form}${hint}${st}`;
 }
 
@@ -152,7 +160,7 @@ $('controls').addEventListener('change', async (ev) => {
   else if (t.id === 'o-dpi') opts.dpi = Number(t.value);
   else return;
   if (t.id === 'o-duplex') {
-    try { await loadChoices(); } catch (e) { scan = {state: 'error', message: String(e)}; }
+    try { await loadChoices(); } catch (e) { scan = fail(e, 'connect'); }
   }
   renderControls();
   savePrefs();
@@ -167,23 +175,34 @@ $('controls').addEventListener('click', async (ev) => {
     else opts[key] = value;
     if (key === 'source') {
       opts.duplex = false;
-      try { await loadChoices(); } catch (e) { scan = {state: 'error', message: String(e)}; }
+      try { await loadChoices(); } catch (e) { scan = fail(e, 'connect'); }
     }
     renderControls();
     savePrefs();
     return;
   }
   if (ev.target.id === 'cancel') { CancelScan(); return; }
+  if (ev.target.id === 'retry') { scan.retry === 'scan' ? startScan() : retryConnect(); return; }
   if (ev.target.id !== 'scan') return;
+  startScan();
+});
+
+async function startScan() {
   scan = {state: 'scanning', message: 'Starting…'};
   renderControls();
   try {
     await Scan({guid: selected, ...opts});
   } catch (e) {
-    scan = {state: 'error', message: String(e)};
+    scan = fail(e, 'scan');
     renderControls();
   }
-});
+}
+
+// Reconnect: search the network again and read the scanner's capabilities once more.
+async function retryConnect() {
+  Search();
+  await select(selected);
+}
 
 // ---- Pages -----------------------------------------------------------------------------------------------
 
@@ -230,7 +249,7 @@ $('pages-bar').addEventListener('click', async (ev) => {
     try {
       const path = await ExportPDF();
       if (path) { scan = {state: 'done', message: `Saved ${path}`}; renderControls(); }
-    } catch (e) { scan = {state: 'error', message: String(e)}; renderControls(); }
+    } catch (e) { scan = fail(e); renderControls(); }
   }
 });
 
@@ -266,7 +285,7 @@ $('add').addEventListener('submit', async (ev) => {
     await setDevices(await Devices());
     select(d.guid);
   } catch (e) {
-    $('addmsg').textContent = String(e);
+    $('addmsg').textContent = errText(e);
   }
 });
 
@@ -283,7 +302,7 @@ EventsOn('searching', (on) => {
   if (manual.seen) setTimeout(endManual, Math.max(0, manual.started + 1000 - Date.now()));
 });
 EventsOn('pages', (list) => { pages = list || []; renderPages(); });
-EventsOn('scan', (ev) => { scan = ev; renderControls(); renderPages(); });
+EventsOn('scan', (ev) => { scan = ev.state === 'error' ? {...ev, retry: 'scan'} : ev; renderControls(); renderPages(); });
 
 (async () => {
   const mode = await Mode();
@@ -349,13 +368,13 @@ async function showDetailsWindow(guid) {
     const [caps, status] = await Promise.all([Capabilities(guid), Status(guid).catch(() => null)]);
     renderDetails(d, caps, status);
   } catch (e) {
-    renderDetails(d, null, null, String(e));
+    renderDetails(d, null, null, errText(e));
   }
 }
 
 $('controls').addEventListener('click', async (ev) => {
   if (!ev.target.closest('#info-btn')) return;
-  try { await ShowInfo(selected); } catch (e) { scan = {state: 'error', message: String(e)}; renderControls(); }
+  try { await ShowInfo(selected); } catch (e) { scan = fail(e); renderControls(); }
 });
 
 // ---- Drag and drop to rearrange --------------------------------------------------------------------------

@@ -182,3 +182,17 @@ func TestScanCancel(t *testing.T) {
 		t.Error("job was not deleted after cancel")
 	}
 }
+
+func TestUnreachable(t *testing.T) {
+	c, _ := NewClient("http://127.0.0.1:1/eSCL") // nothing listens there
+	_, err := c.Caps(context.Background())
+	if err == nil || !Unreachable(err) {
+		t.Fatalf("a refused connection should count as unreachable, got %v", err)
+	}
+	srv := httptest.NewServer(http.NotFoundHandler())
+	defer srv.Close()
+	c, _ = NewClient(srv.URL)
+	if _, err := c.Caps(context.Background()); err == nil || Unreachable(err) {
+		t.Fatalf("an HTTP answer is not unreachable, got %v", err)
+	}
+}

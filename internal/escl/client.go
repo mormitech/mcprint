@@ -114,6 +114,12 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	return ParseStatus(data)
 }
 
+// Unreachable reports whether err is a network failure (no route, refused, timed out) rather than an answer from the scanner.
+func Unreachable(err error) bool {
+	var ne net.Error
+	return errors.As(err, &ne)
+}
+
 // ErrNoPages means the job ended without delivering a page.
 var ErrNoPages = errors.New("the scanner returned no pages (is there a document?)")
 
@@ -162,6 +168,9 @@ func (c *Client) Scan(ctx context.Context, r Resolved, onPage func(jpeg []byte))
 		res, err = c.do(cctx, http.MethodPost, c.Base+"/ScanJobs", "application/xml", body)
 		cancel()
 		if err != nil {
+			if Unreachable(err) {
+				return 0, errors.New("could not reach the scanner: is it switched on and on the same network?")
+			}
 			return 0, fmt.Errorf("could not start the scan: %w", err)
 		}
 		if res.StatusCode != http.StatusServiceUnavailable || attempt == 6 {

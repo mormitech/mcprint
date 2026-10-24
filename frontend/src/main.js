@@ -187,15 +187,20 @@ $('controls').addEventListener('click', async (ev) => {
 
 // ---- Pages -----------------------------------------------------------------------------------------------
 
-function renderPages() {
-  cancelDrag();
-  renderControls();
+// The line above the pages: how many, and what can be done with them.
+function renderBar() {
   const bar = $('pages-bar');
   bar.innerHTML = pages.length
     ? `<span class="grow">${pages.length} page${pages.length === 1 ? '' : 's'}</span>
        <button id="pdf" class="primary" ${scan.state === 'scanning' ? 'disabled' : ''}>Save as PDF…</button>
        <button id="clear" class="danger" ${scan.state === 'scanning' ? 'disabled' : ''}>Clear all</button>`
     : '';
+}
+
+function renderPages() {
+  cancelDrag();
+  renderControls();
+  renderBar();
   $('pages').innerHTML = pages.map((p, i) => `
     <div class="page" data-id="${p.id}">
       <img src="/page/${p.id}.jpg" alt="Page ${i + 1}" data-view="${p.id}" loading="lazy" draggable="false">
@@ -213,7 +218,7 @@ $('pages').addEventListener('click', async (ev) => {
   const t = ev.target.closest('[data-view], [data-del], [data-move]') || ev.target;
   const id = Number(t.closest('.page')?.dataset.id);
   if (t.dataset.view) { $('viewer').innerHTML = `<img src="/page/${t.dataset.view}.jpg">`; $('viewer').hidden = false; }
-  else if (t.dataset.del) { pages = await DeletePage(id); renderPages(); }
+  else if (t.dataset.del) deleteCard(id);
   else if (t.dataset.move) moveCard(id, Number(t.dataset.move));
 });
 $('viewer').addEventListener('click', () => { $('viewer').hidden = true; });
@@ -412,6 +417,25 @@ function updateArrows() {
     c.querySelector('[data-move="-1"]').disabled = i === 0;
     c.querySelector('[data-move="1"]').disabled = i === cards.length - 1;
   });
+}
+
+// The trash button: the page shrinks away, the ones behind it slide forward to close the gap.
+async function deleteCard(id) {
+  const grid = $('pages');
+  const card = grid.querySelector(`.page[data-id="${id}"]`);
+  if (!card || card.dataset.leaving) return;
+  card.dataset.leaving = '1';
+  card.style.pointerEvents = 'none';
+  const backend = DeletePage(id);
+  await card.animate(
+    [{opacity: 1, transform: 'scale(1)'}, {opacity: 0, transform: 'scale(.8)'}],
+    {duration: 200, easing: 'ease-in', fill: 'forwards'}).finished.catch(() => {});
+  flip(() => card.remove());
+  renumber();
+  updateArrows();
+  try { pages = await backend; } catch { pages = await Pages(); renderPages(); return; }
+  renderBar();
+  renderControls();
 }
 
 // The arrow buttons: the page glides to its new place at once, the backend catches up.

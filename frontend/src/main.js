@@ -524,6 +524,7 @@ window.addEventListener('blur', () => cancelDrag());
 // ---- About window ----------------------------------------------------------------------------------------
 // The program started with --about shows this. Links open in the system's browser.
 
+const COFFEE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h12v5a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5zM16.5 11h1.5a2.5 2.5 0 0 1 0 5h-1.8M8 3.5c-.9 1 .9 1.8 0 2.8M12 3.5c-.9 1 .9 1.8 0 2.8"/></svg>';
 const REPO = 'https://github.com/mormitech/mcprint';
 
 async function showAbout() {
@@ -534,7 +535,7 @@ async function showAbout() {
     <p class="muted">Version ${esc(await Version())}</p>
     <p>Scan pages of documents from network scanners (eSCL / AirScan) on macOS, Windows and Linux.</p>
     <p class="muted">Free and open source, MIT license. No accounts, no ads, no telemetry.</p>
-    <p class="links"><a href="${REPO}">Website and source code</a><a href="${REPO}/issues">Report a problem</a><a href="${REPO}/blob/main/LICENSE">License</a><a href="https://mormitech.com/support-us/">Support</a></p>`;
+    <p class="links"><a href="${REPO}">Website and source code</a><a href="${REPO}/issues">Report a problem</a><a href="${REPO}/blob/main/LICENSE">License</a><a class="coffee" href="https://mormitech.com/support-us/">${COFFEE}Buy me a coffee</a></p>`;
 }
 
 document.addEventListener('click', (ev) => {

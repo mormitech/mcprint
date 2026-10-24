@@ -534,7 +534,7 @@ async function showAbout() {
     <p class="muted">Version ${esc(await Version())}</p>
     <p>Scan pages of documents from network scanners (eSCL / AirScan) on macOS, Windows and Linux.</p>
     <p class="muted">Free and open source, MIT license. No accounts, no ads, no telemetry.</p>
-    <p class="links"><a href="${REPO}">Website and source code</a><a href="https://mormitech.com/support-us/">Support</a><a href="${REPO}/issues">Report a problem</a><a href="${REPO}/blob/main/LICENSE">License</a></p>`;
+    <p class="links"><a href="${REPO}">Website and source code</a><a href="${REPO}/issues">Report a problem</a><a href="${REPO}/blob/main/LICENSE">License</a><a href="https://mormitech.com/support-us/">Support</a></p>`;
 }
 
 document.addEventListener('click', (ev) => {

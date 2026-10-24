@@ -40,6 +40,17 @@ into one PDF. No driver, no vendor software, no account.
 - **Picks up where you left off.** The pages of the last session are restored when you reopen the app.
 - **Follows your system.** Light or dark mode, and the About window in the place each system puts it.
 
+<table>
+  <tr>
+    <td><a href="docs/screenshots/03-viewer.png"><img alt="Page view" src="docs/screenshots/03-viewer.png"></a><br><sub>Page view: zoom, drag, turn</sub></td>
+    <td><a href="docs/screenshots/05-dark-mode.png"><img alt="Dark mode" src="docs/screenshots/05-dark-mode.png"></a><br><sub>Dark mode follows your system</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/08-insert-marker.png"><img alt="Insert marker" src="docs/screenshots/08-insert-marker.png"></a><br><sub>Insert the next scan anywhere</sub></td>
+    <td><a href="docs/screenshots/04-pages.png"><img alt="Scanning a stack" src="docs/screenshots/04-pages.png"></a><br><sub>Pages show up as they are scanned</sub></td>
+  </tr>
+</table>
+
 Only network scanners (eSCL / AirScan) are supported. USB-only scanners are not, yet. How the scanner talk works is in
 [docs/scanner-protocol.md](docs/scanner-protocol.md).
 
@@ -120,7 +131,7 @@ mcprint --mock        # the macOS binary is mcprint.app/Contents/MacOS/mcprint; 
 ```
 
 The pages are drawn by `scripts/make-mock.mjs` (committed in `mock/pages`). `--theme dark` (or `light`) forces the look instead of the
-system's, and the screenshots in `docs/screenshots` were taken this way, at a window size of 1280 × 832.
+system's, and the screenshots in `docs/screenshots` were taken this way, at a window size of 1280 × 832 and rendered at 2x (2560 × 1664).
 
 **Versioning.** The version lives in one place, `wails.json` (`info.productVersion`). It feeds the macOS Info.plist, the Windows file
 properties, the window title and the About window. A release is cut by pushing a `v*` tag that matches it; CI checks that, builds the

@@ -8,6 +8,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed all:frontend/dist
@@ -44,7 +45,8 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		// Without Mac options Wails leaves the green zoom (maximise) button disabled.
-		Mac:       &mac.Options{},
+		Mac:       &mac.Options{}, // the window follows the system's light or dark appearance
+		Windows:   &windows.Options{Theme: windows.SystemDefault},
 		OnStartup: app.startup,
 		Bind: []interface{}{
 			app,

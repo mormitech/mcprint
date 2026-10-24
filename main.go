@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
@@ -56,7 +57,13 @@ func main() {
 		app.loadSession()
 	}
 
+	var appMenuBar *menu.Menu
+	if app.infoGUID == "" { // the details window has no menu of its own
+		appMenuBar = appMenu(app)
+	}
+
 	err := wails.Run(&options.App{
+		Menu:   appMenuBar,
 		Title:  title,
 		Width:  width,
 		Height: height,
@@ -66,7 +73,7 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		// Without Mac options Wails leaves the green zoom (maximise) button disabled.
-		Mac:        &mac.Options{}, // the window follows the system's light or dark appearance
+		Mac:        &mac.Options{About: macAbout()}, // also makes the zoom button work; the window follows the system's appearance
 		Windows:    &windows.Options{Theme: windows.SystemDefault},
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,

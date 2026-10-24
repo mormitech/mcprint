@@ -1,0 +1,69 @@
+name: winget-check
+
+# Checks the winget manifest of a published release before it is submitted to winget-pkgs: `winget validate`, then the
+# installer run with winget's switches (see the note below on why not `winget install` itself).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Released version to check (for example 0.6.1)
+        required: true
+
+jobs:
+  winget:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/make-winget-manifest.mjs ${{ inputs.version }} manifest
+      - name: Get winget
+        shell: pwsh
+        run: |
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            Write-Host 'winget not found, installing it'
+            Install-PackageProvider -Name NuGet -Force | Out-Null
+            Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery | Out-Null
+            Repair-WinGetPackageManager -AllUsers
+          }
+          winget --version
+      - name: Validate the manifest
+        shell: pwsh
+        run: |
+          # The runner's winget (1.11) predates schema 1.12 and warns about its header line, which is expected;
+          # winget exits non-zero on any warning, so look at the messages instead of the exit code.
+          $out = winget validate --manifest manifest 2>&1 | Out-String
+          Write-Host $out
+          if ($out -notmatch 'succeeded') { throw 'manifest validation failed' }
+          $other = ($out -split "`n") | Where-Object { $_ -match 'Manifest (Warning|Error)' -and $_ -notmatch 'schema header' }
+          if ($other) { throw "unexpected validation messages: $other" }
+          $global:LASTEXITCODE = 0  # a step ends with the last native exit code; we judged the messages ourselves
+      # `winget install` itself hangs on this headless runner (winget.exe waits forever and never starts the
+      # installer), so run the installer the way winget would: download from the manifest URL, check the manifest's
+      # SHA-256, then run it with winget's Inno Setup switches.
+      - name: Run the installer the way winget does
+        shell: pwsh
+        run: |
+          $manifest = Get-Content manifest\mormitech.mcprint.installer.yaml -Raw
+          $url = [regex]::Match($manifest, 'InstallerUrl: (\S+)').Groups[1].Value
+          $sha = [regex]::Match($manifest, 'InstallerSha256: (\S+)').Groups[1].Value
+          $exe = Join-Path $env:RUNNER_TEMP 'mcprint-setup.exe'
+          Invoke-WebRequest $url -OutFile $exe
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash -ne $sha) { throw "installer hash differs from the manifest ($sha)" }
+          Write-Host 'installer hash matches the manifest'
+          $p = Start-Process $exe -ArgumentList '/SP-','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru
+          if (-not $p.WaitForExit(180000)) { throw 'installer did not finish in 3 minutes' }
+          if ($p.ExitCode -ne 0) { throw "installer exit code $($p.ExitCode)" }
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\mcprint'
+          $exe = Join-Path $dir 'mcprint.exe'
+          if (-not (Test-Path $exe)) { throw 'mcprint.exe missing after install' }
+          $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\mcPrint.lnk'
+          if (-not (Test-Path $lnk)) { throw 'no Start menu entry' }
+          Write-Host 'installed silently: app and Start menu entry are there'
+          $u = Start-Process (Join-Path $dir 'unins000.exe') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru
+          if (-not $u.WaitForExit(120000)) { throw 'uninstaller did not finish in 2 minutes' }
+          $deadline = (Get-Date).AddSeconds(60)
+          while ((Test-Path $exe) -and ((Get-Date) -lt $deadline)) { Start-Sleep -Seconds 2 }
+          if (Test-Path $exe) { throw 'files left after uninstall' }
+          Write-Host 'silent uninstall removed everything'

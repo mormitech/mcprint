@@ -26,8 +26,9 @@ into one PDF. No driver, no vendor software, no account.
 - **Finds your scanners.** It looks for eSCL (AirScan) scanners with mDNS (Bonjour) and remembers them, so they are there the moment
   you start the app. A scanner that does not answer mDNS (some networks block it) can be added by its address.
 - **Only what your scanner can do.** Source (flatbed or feeder), both sides, colour, resolution and paper size are offered as toggles,
-  from what the scanner reports; your choices are remembered per scanner. The **i** button shows everything the scanner told us, including
-  the jobs it keeps in its queue, with a **Clear queue** button for a job that got stuck. Black & white also works on scanners that only
+  from what the scanner reports; your choices are remembered per scanner. The scanner's picture is shown in the list, and the **i** button (or a
+  double-click on the scanner) shows everything the scanner told us; **Additional info** there goes further: links, the jobs it keeps,
+  usage counters and consumables, where the scanner has them. Black & white also works on scanners that only
   deliver it as grey: the page is made black and white here.
 - **Pages show up as they are scanned.** Feed a stack and watch the pages arrive (the scan button waits until it is done). When something
   goes wrong (feeder empty, scanner off), there is a **Reconnect** or **Try again** button.

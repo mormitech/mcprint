@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"sort"
@@ -22,7 +23,8 @@ var mockPageFiles embed.FS
 type mockState struct {
 	registry *escl.Registry
 	caps     map[string]*escl.Caps
-	docs     [][]byte // the made-up documents, in the order they are "scanned"
+	docs     [][]byte          // the made-up documents, in the order they are "scanned"
+	icons    map[string]string // the pictures some made-up scanners offer of themselves; the others offer none
 
 	mu   sync.Mutex
 	next int
@@ -110,6 +112,8 @@ func newMock() (*mockState, error) {
 		m.caps[guid] = caps
 	}
 
+	m.icons = map[string]string{mockAlder: mockIcon("#2f6fdb"), mockKestrel: mockIcon("#1f8a5b")}
+
 	now := time.Now()
 	m.registry = escl.NewMockRegistry([]escl.Device{
 		{GUID: mockAlder, Name: "Alder DocuScan 5400", Model: "Alder DocuScan 5400", Host: "192.168.1.40", Port: 80, Scheme: "http", Root: "eSCL", LastSeen: now, Online: true},
@@ -165,4 +169,12 @@ func (m *mockState) scan(ctx context.Context, r escl.Resolved, onPage func([]byt
 		onPage(m.nextDoc())
 	}
 	return n, nil
+}
+
+// mockIcon is a small printer picture in the given colour, as a data: URL.
+func mockIcon(colour string) string {
+	svg := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="14" y="8" width="36" height="16" rx="2" fill="#fff" stroke="#8a94a6" stroke-width="2"/>` +
+		`<rect x="6" y="22" width="52" height="26" rx="6" fill="` + colour + `"/><rect x="14" y="38" width="36" height="18" rx="2" fill="#fff" stroke="#8a94a6" stroke-width="2"/>` +
+		`<circle cx="50" cy="30" r="2.5" fill="#fff"/></svg>`
+	return "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(svg))
 }

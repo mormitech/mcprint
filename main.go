@@ -37,12 +37,14 @@ func version() string {
 	return p.Info.ProductVersion
 }
 
-// windowFlags reads --info <scanner id> (show the details window of that scanner) and --about (show the About window)
+// windowFlags reads --info <scanner id> (show the details window of that scanner), --extra <scanner id> (its additional info
+// window) and --about (show the About window)
 // instead of the app. The app starts itself this way, because Wails v2 has one window per process.
-func windowFlags(args []string) (info string, about, mock bool, theme string) {
+func windowFlags(args []string) (info, extra string, about, mock bool, theme string) {
 	fs := flag.NewFlagSet("mcprint", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&info, "info", "", "show the details window of this scanner")
+	fs.StringVar(&extra, "extra", "", "show the additional info window of this scanner")
 	fs.BoolVar(&about, "about", false, "show the About window")
 	fs.BoolVar(&mock, "mock", false, "demo mode: made-up scanners and pages, for screenshots")
 	fs.BoolVar(&mock, "demo", false, "same as --mock")
@@ -54,12 +56,14 @@ func windowFlags(args []string) (info string, about, mock bool, theme string) {
 func main() {
 	app := NewApp()
 	title, width, height := "mcPrint v"+version(), 1440, 800
-	info, about, mock, theme := windowFlags(os.Args[1:])
+	info, extra, about, mock, theme := windowFlags(os.Args[1:])
 	switch {
 	case about:
 		app.mode, title, width, height = "about", "About mcPrint", 440, 520
 	case info != "":
 		app.mode, app.infoGUID, title, width, height = "info", info, "Scanner details", 600, 720
+	case extra != "":
+		app.mode, app.infoGUID, title, width, height = "extra", extra, "Additional info", 820, 860
 	default:
 		if !mock { // demo mode must not read the real session
 			app.loadSession()

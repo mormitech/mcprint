@@ -11,13 +11,15 @@ export function Choices(arg1:string,arg2:string,arg3:boolean):Promise<escl.Choic
 
 export function ClearPages():Promise<Array<main.PageView>>;
 
-export function ClearQueue(arg1:string):Promise<number>;
-
 export function DeletePage(arg1:number):Promise<Array<main.PageView>>;
 
 export function Devices():Promise<Array<escl.Device>>;
 
 export function ExportPDF():Promise<string>;
+
+export function Extra(arg1:string):Promise<escl.Extra>;
+
+export function Icon(arg1:string):Promise<string>;
 
 export function LoadPrefs():Promise<string>;
 
@@ -38,6 +40,8 @@ export function Scan(arg1:main.ScanRequest):Promise<void>;
 export function Scanning():Promise<boolean>;
 
 export function Search():Promise<void>;
+
+export function ShowExtra(arg1:string):Promise<void>;
 
 export function ShowInfo(arg1:string):Promise<void>;
 

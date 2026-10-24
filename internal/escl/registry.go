@@ -22,16 +22,17 @@ import (
 
 // Device is a scanner we know about, seen on the network now or earlier.
 type Device struct {
-	GUID     string    `json:"guid"`
-	Name     string    `json:"name"`
-	Model    string    `json:"model"`
-	Host     string    `json:"host"`
-	Port     int       `json:"port"`
-	Scheme   string    `json:"scheme"` // http or https
-	Root     string    `json:"root"`   // path of the eSCL service, default "eSCL"
-	LastSeen time.Time `json:"lastSeen"`
-	Online   bool      `json:"online"`
-	Manual   bool      `json:"manual"` // added by address, not found by mDNS
+	GUID     string            `json:"guid"`
+	Name     string            `json:"name"`
+	Model    string            `json:"model"`
+	Host     string            `json:"host"`
+	Port     int               `json:"port"`
+	Scheme   string            `json:"scheme"` // http or https
+	Root     string            `json:"root"`   // path of the eSCL service, default "eSCL"
+	LastSeen time.Time         `json:"lastSeen"`
+	Online   bool              `json:"online"`
+	Manual   bool              `json:"manual"`         // added by address, not found by mDNS
+	Info     map[string]string `json:"info,omitempty"` // the mDNS TXT record, as the scanner announced it
 }
 
 // BaseURL is the root of the scanner's eSCL service.
@@ -106,6 +107,7 @@ func deviceFromEntry(e *zeroconf.ServiceEntry) (Device, bool) {
 		Scheme: scheme,
 		Root:   root,
 		Online: true,
+		Info:   txt,
 	}, true
 }
 

@@ -1,7 +1,7 @@
 import './style.css';
 import {
-  Version, Devices, Capabilities, Mode, ShowInfo, Search, AddDevice, RemoveDevice, Choices, Scan, Scanning, ClearQueue, Pages, DeletePage, MovePage,
-  ClearPages, MovePageTo, ExportPDF, LoadPrefs, SavePrefs, Status,
+  Version, Devices, Capabilities, Mode, ShowInfo, Search, AddDevice, Choices, Scan, Scanning, Pages, DeletePage, MovePage,
+  ClearPages, MovePageTo, ExportPDF, LoadPrefs, SavePrefs, Status, Extra, ShowExtra, Icon,
 } from '../wailsjs/go/main/App';
 import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
 import logo from './assets/mormitech-mark.svg';
@@ -59,6 +59,18 @@ function ago(t) {
   return s < 90 ? 'just now' : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} days ago`;
 }
 
+// The picture each scanner offers of itself, read once per scanner when it is online: guid -> data: URL, or '' if none.
+const icons = {}, iconTried = new Set();
+function loadIcons() {
+  for (const d of devices) {
+    // tried again when the announcement that names the picture (d.info.representation) arrives
+    const key = `${d.guid}|${d.info?.representation || ''}`;
+    if (!d.online || iconTried.has(key)) continue;
+    iconTried.add(key);
+    Icon(d.guid).then((url) => { if (url && icons[d.guid] !== url) { icons[d.guid] = url; renderDevices(); } }).catch(() => {});
+  }
+}
+
 function renderDevices() {
   const el = $('devices');
   if (!devices.length) {
@@ -66,18 +78,19 @@ function renderDevices() {
     return;
   }
   el.innerHTML = devices.map((d) => `
-    <div class="device ${d.guid === selected ? 'sel' : ''} ${d.online ? '' : 'off'}" data-guid="${esc(d.guid)}">
+    <div class="device ${d.guid === selected ? 'sel' : ''} ${d.online ? '' : 'off'} ${icons[d.guid] ? 'has-icon' : ''}" data-guid="${esc(d.guid)}">
+      ${icons[d.guid] ? `<img class="pic" src="${esc(icons[d.guid])}" alt="">` : ''}
       <span class="dot"></span>
       <span class="name">${esc(d.name)}</span>
       <span class="sub">${esc(d.host)}${d.port && d.port !== 80 ? ':' + d.port : ''}${d.scheme === 'https' ? ' · https' : ''}${d.manual ? ' · added by hand' : ''}</span>
       <span class="sub">${d.online ? 'online' : 'offline, last seen ' + ago(d.lastSeen)}</span>
-      <button class="rm" data-rm="${esc(d.guid)}" title="Forget this scanner">remove</button>
     </div>`).join('');
 }
 
 async function setDevices(list) {
   devices = list || [];
   renderDevices();
+  loadIcons();
   if (!selected && devices.length) {
     const want = devices.find((d) => d.guid === prefs.last) || devices.find((d) => d.online);
     if (want) await select(want.guid);
@@ -376,15 +389,13 @@ $('search').addEventListener('click', () => {
   Search();
 });
 $('devices').addEventListener('click', async (ev) => {
-  const rm = ev.target.dataset.rm;
-  if (rm) {
-    await RemoveDevice(rm);
-    if (rm === selected) { selected = null; ready = false; }
-    setDevices(await Devices());
-    return;
-  }
   const guid = ev.target.closest('.device')?.dataset.guid;
   if (guid && guid !== selected) select(guid);
+});
+$('devices').addEventListener('dblclick', async (ev) => {
+  const guid = ev.target.closest('.device')?.dataset.guid;
+  if (!guid) return;
+  try { await ShowInfo(guid); } catch (e) { scan = fail(e); renderControls(); }
 });
 $('add').addEventListener('submit', async (ev) => {
   ev.preventDefault();
@@ -439,6 +450,7 @@ EventsOn('scan', (ev) => {
   const mode = await Mode();
   if (mode === 'about') { showAbout(); return; }
   if (mode.startsWith('info:')) { showDetailsWindow(mode.slice(5)); return; }
+  if (mode.startsWith('extra:')) { showExtraWindow(mode.slice(6)); return; }
   try { prefs = {last: '', devices: {}, ...JSON.parse(await LoadPrefs())}; } catch {}
   pages = (await Pages()) || [];
   renderPages();
@@ -467,20 +479,12 @@ function makeAndModel(c) {
   return model.toLowerCase().startsWith(make.toLowerCase()) ? model : `${make} ${model}`.trim();
 }
 
-const JOB_STATE = {Canceled: 'cancelled', Completed: 'completed', Aborted: 'failed', Processing: 'running', Pending: 'waiting'};
-// "JobCanceledAtDevice" -> "canceled at device"
-const reason = (r) => r.replace(/^Job/, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
-
-function queueRows(jobs) {
-  if (!jobs.length) return 'empty';
-  const rows = jobs.map((j, i) => `${i + 1}. ${esc(JOB_STATE[j.state] ?? j.state)}${j.reasons.length ? ` (${esc(j.reasons.map(reason).join(', '))})` : ''}, ${j.done} page${j.done === 1 ? '' : 's'} scanned`);
-  return `${jobs.length} job${jobs.length === 1 ? '' : 's'} kept by the scanner<br>${rows.join('<br>')}<br><button id="clear-queue" class="retry">Clear queue</button> <span id="queue-msg" class="muted"></span>`;
-}
+const queueRows = (jobs) => jobs.length ? `${jobs.length} job${jobs.length === 1 ? '' : 's'} kept by the scanner` : 'empty';
 
 function renderDetails(d, caps, status, err) {
   const base = `${d.scheme}://${d.host.includes(':') ? `[${d.host}]` : d.host}:${d.port}${d.root ? '/' + d.root : ''}`;
   const alive = status ? 'online' : 'not reachable right now';
-  $('detail').innerHTML = `<h3>${esc(d.name)}</h3>
+  $('detail').innerHTML = `<button id="extra-btn" data-guid="${esc(d.guid)}">Additional info</button><h3>${esc(d.name)}</h3>
       <h4>Found on the network</h4>
       <table>
         <tr><th>IP address</th><td>${esc(d.host)}</td></tr>
@@ -505,31 +509,33 @@ function renderDetails(d, caps, status, err) {
       </table>`}`;
 }
 
-// Clear queue (details window): delete every job the scanner keeps, then show the list again.
-let detailGuid = null;
+// The additional info window (the program started with --extra): everything else this scanner will tell. A scanner may
+// give a lot, a little or nothing, so this only shows what came back.
+async function showExtraWindow(guid) {
+  document.body.classList.add('detail-mode');
+  $('detail').hidden = false;
+  const d = (await Devices()).find((x) => x.guid === guid);
+  if (!d) { $('detail').innerHTML = '<p class="muted">This scanner is not known (any more).</p>'; return; }
+  const head = `<h3>${esc(d.name)}</h3><p class="muted">Additional info</p>`;
+  $('detail').innerHTML = `${head}<p class="muted">Reading…</p>`;
+  let data;
+  try { data = await Extra(guid); } catch (e) { $('detail').innerHTML = `${head}<p class="muted">${esc(errText(e))}</p>`; return; }
+  const {icon, sections} = data;
+  if (!icon && !(sections || []).length) { $('detail').innerHTML = `${head}<p class="muted">This scanner has nothing more to tell.</p>`; return; }
+  const row = (i) => `<tr><th>${esc(i.label)}</th><td class="pre">${i.url ? `<a href="${esc(i.url)}">${esc(i.value)}</a>` : esc(i.value)}</td></tr>`;
+  $('detail').innerHTML = head + (icon ? `<p><img class="scanner-icon" src="${esc(icon)}" alt=""></p>` : '') +
+    (sections || []).map((sec) => `<h4>${esc(sec.title)}</h4><table>${sec.items.map(row).join('')}</table>`).join('');
+}
+
 $('detail').addEventListener('click', async (ev) => {
-  const btn = ev.target.closest('#clear-queue');
-  if (!btn || !detailGuid) return;
-  btn.disabled = true;
-  try {
-    const n = await ClearQueue(detailGuid);
-    const [caps, status] = await Promise.all([Capabilities(detailGuid), Status(detailGuid).catch(() => null)]);
-    const d = (await Devices()).find((x) => x.guid === detailGuid);
-    renderDetails(d, caps, status);
-    const msg = $('queue-msg');
-    if (msg) msg.textContent = `Cleared ${n} job${n === 1 ? '' : 's'}`;
-  } catch (e) {
-    btn.disabled = false;
-    const msg = $('queue-msg');
-    if (msg) msg.textContent = errText(e);
-  }
+  if (!ev.target.closest('#extra-btn')) return;
+  try { await ShowExtra(ev.target.closest('#extra-btn').dataset.guid); } catch (e) { /* the window just does not open */ }
 });
 
 // The details window (the program started with --info) shows this instead of the app.
 async function showDetailsWindow(guid) {
   document.body.classList.add('detail-mode');
   $('detail').hidden = false;
-  detailGuid = guid;
   const d = (await Devices()).find((x) => x.guid === guid);
   if (!d) { $('detail').innerHTML = '<p class="muted">This scanner is not known (any more).</p>'; return; }
   renderDetails(d);

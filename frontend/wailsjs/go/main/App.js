@@ -18,10 +18,6 @@ export function ClearPages() {
   return window['go']['main']['App']['ClearPages']();
 }
 
-export function ClearQueue(arg1) {
-  return window['go']['main']['App']['ClearQueue'](arg1);
-}
-
 export function DeletePage(arg1) {
   return window['go']['main']['App']['DeletePage'](arg1);
 }
@@ -32,6 +28,14 @@ export function Devices() {
 
 export function ExportPDF() {
   return window['go']['main']['App']['ExportPDF']();
+}
+
+export function Extra(arg1) {
+  return window['go']['main']['App']['Extra'](arg1);
+}
+
+export function Icon(arg1) {
+  return window['go']['main']['App']['Icon'](arg1);
 }
 
 export function LoadPrefs() {
@@ -72,6 +76,10 @@ export function Scanning() {
 
 export function Search() {
   return window['go']['main']['App']['Search']();
+}
+
+export function ShowExtra(arg1) {
+  return window['go']['main']['App']['ShowExtra'](arg1);
 }
 
 export function ShowInfo(arg1) {

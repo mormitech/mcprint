@@ -8,7 +8,9 @@ import (
 	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -289,26 +291,45 @@ func TestParseStatusJobs(t *testing.T) {
 	}
 }
 
-func TestClearJobs(t *testing.T) {
-	var deleted []string
+func TestGatherExtra(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/eSCL/ScannerStatus", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<scan:ScannerStatus xmlns:scan="x" xmlns:pwg="y"><pwg:State>Idle</pwg:State><scan:Jobs>
-<scan:JobInfo><pwg:JobUri>/eSCL/ScanJobs/a</pwg:JobUri><pwg:JobState>Canceled</pwg:JobState></scan:JobInfo>
-<scan:JobInfo><pwg:JobUri>http://8.8.8.8/eSCL/ScanJobs/evil</pwg:JobUri><pwg:JobState>Pending</pwg:JobState></scan:JobInfo>
-<scan:JobInfo><pwg:JobUri>/eSCL/ScanJobs/b</pwg:JobUri><pwg:JobState>Processing</pwg:JobState></scan:JobInfo>
-</scan:Jobs></scan:ScannerStatus>`))
+	mux.HandleFunc("/eSCL/ScannerCapabilities", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<scan:ScannerCapabilities xmlns:scan="x" xmlns:pwg="y"><pwg:Version>2.6</pwg:Version><pwg:MakeAndModel>M</pwg:MakeAndModel><scan:SerialNumber>S123</scan:SerialNumber><scan:AdminURI>http://127.0.0.1/admin</scan:AdminURI><scan:Platen><scan:PlatenInputCaps><scan:MaxWidth>1</scan:MaxWidth></scan:PlatenInputCaps></scan:Platen></scan:ScannerCapabilities>`))
 	})
-	mux.HandleFunc("/eSCL/ScanJobs/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
-			deleted = append(deleted, r.URL.Path)
-		}
+	mux.HandleFunc("/eSCL/ScannerStatus", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<scan:ScannerStatus xmlns:scan="x" xmlns:pwg="y"><pwg:State>Idle</pwg:State><scan:Jobs><scan:JobInfo><pwg:JobUri>/eSCL/ScanJobs/a</pwg:JobUri><scan:Age>7200</scan:Age><pwg:JobState>Canceled</pwg:JobState><pwg:JobStateReasons><pwg:JobStateReason>JobCanceledAtDevice</pwg:JobStateReason></pwg:JobStateReasons></scan:JobInfo></scan:Jobs></scan:ScannerStatus>`))
+	})
+	mux.HandleFunc("/etc/mnt_info.csv", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("\"Page Counter\",\"Empty\",\"Error1\"\n\"2636\",\"\",\"Kev\xe9s\"\n"))
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
-	c, _ := NewClient(srv.URL + "/eSCL")
-	n, err := c.ClearJobs(context.Background())
-	if err != nil || n != 2 || len(deleted) != 2 || deleted[0] != "/eSCL/ScanJobs/a" || deleted[1] != "/eSCL/ScanJobs/b" {
-		t.Fatalf("n=%d err=%v deleted=%v", n, err, deleted)
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+	ex := Gather(context.Background(), Device{Host: u.Hostname(), Port: port, Scheme: "http", Root: "eSCL", Info: map[string]string{"ty": "M", "note": ""}})
+	got := map[string]string{}
+	for _, s := range ex.Sections {
+		for _, it := range s.Items {
+			got[s.Title+"/"+it.Label] = it.Value
+		}
+	}
+	want := map[string]string{
+		"Announced on the network (mDNS)/ty":                "M",
+		"More from the capabilities document/Serial number": "S123",
+		"Jobs the scanner remembers/Job 1":                  "age: 2 h 0 min ago\njob state: Canceled\njob state reason: Canceled at device",
+		"Counters and consumables/Page Counter":             "2636",
+		"Counters and consumables/Error1":                   "Kevés",
+		"Links/Administration page":                         "http://127.0.0.1/admin",
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s: got %q, want %q", k, got[k], v)
+		}
+	}
+	if _, ok := got["Counters and consumables/Empty"]; ok {
+		t.Error("an empty value is listed")
+	}
+	if _, ok := got["Usage/x"]; ok || len(ex.Sections) == 0 {
+		t.Errorf("%+v", ex)
 	}
 }

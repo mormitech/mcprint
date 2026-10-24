@@ -114,31 +114,6 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	return ParseStatus(data)
 }
 
-// ClearJobs deletes every job in the scanner's job list, including one that is stuck. It returns how many it deleted.
-func (c *Client) ClearJobs(ctx context.Context) (int, error) {
-	st, err := c.Status(ctx)
-	if err != nil {
-		return 0, errors.New("the scanner is not reachable")
-	}
-	base, _ := url.Parse(c.Base)
-	deleted := 0
-	for _, j := range st.Jobs {
-		ju, err := base.Parse(j.URI)
-		if err != nil || ju.Host != base.Host {
-			continue // a job location on another host is never followed
-		}
-		res, err := c.do(ctx, http.MethodDelete, strings.TrimRight(ju.String(), "/"), "", nil)
-		if err != nil {
-			return deleted, fmt.Errorf("lost the scanner while clearing its queue: %w", err)
-		}
-		res.Body.Close()
-		if res.StatusCode < 300 || res.StatusCode == http.StatusNotFound {
-			deleted++
-		}
-	}
-	return deleted, nil
-}
-
 // Unreachable reports whether err is a network failure (no route, refused, timed out) rather than an answer from the scanner.
 func Unreachable(err error) bool {
 	var ne net.Error

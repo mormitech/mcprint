@@ -67,6 +67,7 @@ type App struct {
 
 	mu       sync.Mutex
 	caps     map[string]capsEntry
+	icons    map[string]string // the pictures scanners offer of themselves, by scanner
 	pages    []*Page
 	nextID   int
 	theme    string     // --theme: light or dark instead of the system's setting
@@ -84,6 +85,7 @@ func NewApp() *App {
 		cacheDir: filepath.Join(cache, "mcprint"),
 		confDir:  filepath.Join(conf, "mcprint"),
 		caps:     map[string]capsEntry{},
+		icons:    map[string]string{},
 		nextID:   1,
 	}
 	return a
@@ -94,19 +96,13 @@ func (a *App) startup(ctx context.Context) {
 	if a.mock != nil { // demo mode: the made-up scanners, no searching
 		a.registry = a.mock.registry
 		a.registry.SetOnChange(func() { wruntime.EventsEmit(a.ctx, "devices", a.registry.List()) })
-		if a.mode == "info" {
-			if d, ok := a.registry.Get(a.infoGUID); ok {
-				wruntime.WindowSetTitle(ctx, d.Name+" – details")
-			}
-		}
+		a.titleWindow(ctx)
 		return
 	}
 	if a.mode != "" { // a small window of its own: no searching and no session
-		if a.mode == "info" { // read the saved device list
+		if a.mode == "info" || a.mode == "extra" { // read the saved device list
 			a.registry = escl.NewRegistry(filepath.Join(a.cacheDir, "devices.json"), nil)
-			if d, ok := a.registry.Get(a.infoGUID); ok {
-				wruntime.WindowSetTitle(ctx, d.Name+" – details")
-			}
+			a.titleWindow(ctx)
 		}
 		return
 	}
@@ -115,6 +111,20 @@ func (a *App) startup(ctx context.Context) {
 	})
 	a.registry.OnSweep = func(searching bool) { wruntime.EventsEmit(a.ctx, "searching", searching) }
 	go a.registry.Run(ctx)
+}
+
+// titleWindow names a scanner's window after the scanner.
+func (a *App) titleWindow(ctx context.Context) {
+	d, ok := a.registry.Get(a.infoGUID)
+	if !ok {
+		return
+	}
+	switch a.mode {
+	case "info":
+		wruntime.WindowSetTitle(ctx, d.Name+" – details")
+	case "extra":
+		wruntime.WindowSetTitle(ctx, d.Name+" – additional info")
+	}
 }
 
 // Version is the app version from wails.json.
@@ -210,6 +220,47 @@ func (a *App) Status(guid string) (escl.Status, error) {
 	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
 	defer cancel()
 	return c.Status(ctx)
+}
+
+// Icon is the picture the scanner offers of itself as a data: URL, or "" if it has none. A picture found is kept for the run.
+func (a *App) Icon(guid string) string {
+	a.mu.Lock()
+	icon, ok := a.icons[guid]
+	a.mu.Unlock()
+	if ok {
+		return icon
+	}
+	if a.mock != nil {
+		return a.mock.icons[guid]
+	}
+	d, known := a.registry.Get(guid)
+	if !known || !d.Online {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 12*time.Second)
+	defer cancel()
+	icon = escl.Icon(ctx, d)
+	if icon != "" { // a failure is not remembered: the scanner may answer next time
+		a.mu.Lock()
+		a.icons[guid] = icon
+		a.mu.Unlock()
+	}
+	return icon
+}
+
+// Extra is everything else the scanner offers: what it announced, links, a picture, jobs and usage counters. A scanner
+// that has none of it gives an empty answer.
+func (a *App) Extra(guid string) (escl.Extra, error) {
+	d, ok := a.registry.Get(guid)
+	if !ok {
+		return escl.Extra{}, errors.New("unknown scanner")
+	}
+	if a.mock != nil {
+		return escl.Extra{Sections: []escl.Section{}}, nil
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+	defer cancel()
+	return escl.Gather(ctx, d), nil
 }
 
 // ---- Scanning -----------------------------------------------------------------------------------------------
@@ -311,23 +362,6 @@ func (a *App) Scanning() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.scanning
-}
-
-// ClearQueue deletes every job in the scanner's job list (a scan that was interrupted can leave one stuck there).
-func (a *App) ClearQueue(guid string) (int, error) {
-	if a.mock != nil {
-		return 0, nil
-	}
-	if a.Scanning() {
-		return 0, errors.New("a scan is running: wait until it is done")
-	}
-	c, err := a.client(guid)
-	if err != nil {
-		return 0, err
-	}
-	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
-	defer cancel()
-	return c.ClearJobs(ctx)
 }
 
 // ---- Pages --------------------------------------------------------------------------------------------------
@@ -479,10 +513,10 @@ func (a *App) SavePrefs(js string) error {
 
 // ---- Details window -----------------------------------------------------------------------------------------
 
-// Mode tells the UI what to show: "" for the app, "about", or "info:<scanner id>" for the details of a scanner.
+// Mode tells the UI what to show: "" for the app, "about", or "info:<scanner id>" for the details of a scanner, "extra:<scanner id>" for its additional info.
 func (a *App) Mode() string {
-	if a.mode == "info" {
-		return "info:" + a.infoGUID
+	if a.mode == "info" || a.mode == "extra" {
+		return a.mode + ":" + a.infoGUID
 	}
 	return a.mode
 }
@@ -524,6 +558,9 @@ func (a *App) openWindow(key string, args ...string) error {
 
 // ShowInfo opens the details of a scanner in a window of its own.
 func (a *App) ShowInfo(guid string) error { return a.openWindow("info:"+guid, "--info", guid) }
+
+// ShowExtra opens the additional info of a scanner in a window of its own.
+func (a *App) ShowExtra(guid string) error { return a.openWindow("extra:"+guid, "--extra", guid) }
 
 // showAbout opens the About window.
 func (a *App) showAbout() { a.openWindow("about", "--about") }

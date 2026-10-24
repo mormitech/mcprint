@@ -12,6 +12,10 @@
   <img alt="status" src="https://img.shields.io/badge/status-early%20preview-orange.svg">
 </p>
 
+<p align="center">
+  <a href="https://mormitech.com/mctools/mcprint/"><img alt="mcPrint main window with a network scanner selected and scanned pages" src="https://mormitech.com/mctools/mcprint/assets/mcprint_01-main.png" width="820"></a>
+</p>
+
 ---
 
 ## What it does

@@ -44,11 +44,10 @@ mcPrint is an **early preview**. Download it from the [latest release](https://g
 | **Windows** (x64) | `mcprint-setup-<version>-windows-x64.exe`, no admin rights needed (`/VERYSILENT` installs without any window). SmartScreen shows **More info → Run anyway**. There is also a plain `.zip`. |
 | **Linux** (x64) | `mcprint-<version>-linux-x64.tar.gz`: extract and run `mcprint`. You need GTK 3 and WebKitGTK 4.1 (`libgtk-3-0` and `libwebkit2gtk-4.1-0` on Debian and Ubuntu). |
 
-Or with Homebrew, on macOS and Linux (from the [mormitech tap](https://github.com/mormitech/homebrew-tap)):
+Or with Homebrew (from the [mormitech tap](https://github.com/mormitech/homebrew-tap); on Linux you also need a current Homebrew and the GTK 3 and WebKitGTK 4.1 libraries; upgrade and uninstall use `--cask`):
 
 ```
-brew install --cask mormitech/tap/mcprint   # macOS, Apple silicon
-brew install mormitech/tap/mcprint          # Linux x64
+brew install mormitech/tap/mcprint   # macOS (Apple silicon) and Linux (x64)
 ```
 
 ### Platform status

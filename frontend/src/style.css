@@ -32,7 +32,7 @@ button.danger:hover:not(:disabled) { border-color:var(--bad); }
 #controls { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
 .empty { color:var(--muted); }
 .form { display:flex; flex-wrap:wrap; gap:12px 18px; align-items:end; }
-.form label { display:grid; gap:4px; font-size:12px; color:var(--muted); }
+.form label, .form .field { display:grid; gap:4px; font-size:12px; color:var(--muted); }
 .form label.check { display:flex; align-items:center; gap:6px; padding-bottom:7px; color:var(--text); font-size:14px; }
 .state { margin-top:10px; font-size:13px; color:var(--muted); } .state.error { color:var(--bad); } .state.done { color:var(--ok); }
 #pages-bar { display:flex; gap:8px; align-items:center; } #pages-bar .grow { flex:1; color:var(--muted); }
@@ -61,3 +61,10 @@ body.detail-mode { display:block; } body.detail-mode #side, body.detail-mode mai
 body.dragging, body.dragging * { cursor:grabbing !important; }
 .page.placeholder { border:2px dashed var(--accent); background:var(--sel); } .page.placeholder > * { opacity:.25; }
 .page.ghost { position:fixed; left:0; top:0; z-index:20; pointer-events:none; margin:0; box-shadow:0 14px 34px var(--shadow); opacity:.96; }
+
+.seg { display:inline-flex; padding:2px; gap:2px; background:var(--btn); border:1px solid var(--line); border-radius:9px; }
+.seg button { display:flex; align-items:center; gap:6px; padding:4px 10px 4px 8px; border:none; border-radius:7px; background:none; color:var(--muted); font-size:13px; }
+.seg button svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.seg button:hover:not(:disabled):not(.on) { color:var(--text); }
+.seg button.on { background:var(--accent); color:var(--accent-text); box-shadow:0 1px 3px var(--shadow); }
+.seg button:disabled { opacity:1; cursor:default; } .seg button:disabled:not(.on) { opacity:.45; }

@@ -9,6 +9,11 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 const SOURCE = {platen: 'Flatbed', feeder: 'Feeder'};
 const COLOR = {color: 'Colour', gray: 'Grey', bw: 'Black & white'};
+// Icons for the source toggle: a flatbed with its lid raised over the glass, and a feeder with a sheet going in.
+const ICON = {
+  platen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11 7.5 5h12.5l-2.5 6"/><rect x="3" y="11" width="18" height="8" rx="2"/><path d="M6.5 15h11"/></svg>',
+  feeder: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2.5" width="8" height="7.5" rx="1"/><path d="M12 4.5v3.3m-1.7-1.6 1.7 1.7 1.7-1.7"/><rect x="3" y="12" width="18" height="8" rx="2"/><path d="M7 16h10"/></svg>',
+};
 const PAPER = {a4: 'A4', a5: 'A5', letter: 'Letter', legal: 'Legal', max: 'Largest'};
 
 let devices = [];
@@ -114,7 +119,8 @@ function renderControls() {
   let form = '';
   if (ready && choices) {
     form = `<div class="form">
-      <label>Source<select id="o-source" ${busy ? 'disabled' : ''}>${choices.sources.map((s) => opt(SOURCE, s, opts.source)).join('')}</select></label>
+      <div class="field">Source<div class="seg" role="radiogroup" aria-label="Source">${choices.sources.map((s) =>
+        `<button type="button" role="radio" aria-checked="${s === opts.source}" class="${s === opts.source ? 'on' : ''}" data-source="${s}" ${busy || choices.sources.length < 2 ? 'disabled' : ''}>${ICON[s]}<span>${SOURCE[s]}</span></button>`).join('')}</div></div>
       ${choices.canDuplex && opts.source === 'feeder' ? `<label class="check"><input type="checkbox" id="o-duplex" ${opts.duplex ? 'checked' : ''} ${busy ? 'disabled' : ''}> Both sides</label>` : ''}
       <label>Colour<select id="o-color" ${busy ? 'disabled' : ''}>${choices.colors.map((c) => opt(COLOR, c, opts.color)).join('')}</select></label>
       <label>Resolution<select id="o-dpi" ${busy ? 'disabled' : ''}>${choices.dpis.map((v) => `<option value="${v}" ${v === opts.dpi ? 'selected' : ''}>${v} dpi</option>`).join('')}</select></label>
@@ -133,13 +139,12 @@ function renderControls() {
 
 $('controls').addEventListener('change', async (ev) => {
   const t = ev.target;
-  if (t.id === 'o-source') { opts.source = t.value; opts.duplex = false; }
-  else if (t.id === 'o-duplex') opts.duplex = t.checked;
+  if (t.id === 'o-duplex') opts.duplex = t.checked;
   else if (t.id === 'o-color') opts.color = t.value;
   else if (t.id === 'o-dpi') opts.dpi = Number(t.value);
   else if (t.id === 'o-paper') opts.paper = t.value;
   else return;
-  if (t.id === 'o-source' || t.id === 'o-duplex') {
+  if (t.id === 'o-duplex') {
     try { await loadChoices(); } catch (e) { scan = {state: 'error', message: String(e)}; }
   }
   renderControls();
@@ -147,6 +152,15 @@ $('controls').addEventListener('change', async (ev) => {
 });
 
 $('controls').addEventListener('click', async (ev) => {
+  const src = ev.target.closest('[data-source]');
+  if (src && src.dataset.source !== opts.source) {
+    opts.source = src.dataset.source;
+    opts.duplex = false;
+    try { await loadChoices(); } catch (e) { scan = {state: 'error', message: String(e)}; }
+    renderControls();
+    savePrefs();
+    return;
+  }
   if (ev.target.id === 'cancel') { CancelScan(); return; }
   if (ev.target.id !== 'scan') return;
   scan = {state: 'scanning', message: 'Starting…'};

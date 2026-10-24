@@ -1,0 +1,45 @@
+name: build
+
+# Every push builds and tests on the three systems. The version lives in wails.json; a v* tag has to match it.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      # The Go code embeds the built frontend, so it has to exist before `go vet` and `go test`.
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - name: Tags
+        id: tags
+        shell: bash
+        run: echo "tags=${{ runner.os == 'Linux' && 'webkit2_41' || '' }}" >> "$GITHUB_OUTPUT"
+      - run: go vet -tags "${{ steps.tags.outputs.tags }}" ./...
+      - run: go test -tags "${{ steps.tags.outputs.tags }}" ./...
+      - run: wails build -tags "${{ steps.tags.outputs.tags }}"
+      - name: Version
+        shell: bash
+        run: |
+          v=$(node -p "require('./wails.json').info.productVersion")
+          if [[ "$GITHUB_REF" == refs/tags/v* && "$GITHUB_REF_NAME" != "v$v" ]]; then
+            echo "tag $GITHUB_REF_NAME does not match wails.json version $v"; exit 1
+          fi

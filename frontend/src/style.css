@@ -51,8 +51,8 @@ button.danger:hover:not(:disabled) { border-color:var(--bad); }
 .tip:hover::after { opacity:1; transform:translate(-50%,0); }
 button.icon { width:26px; height:26px; padding:0; border-radius:50%; font-weight:600; font-family:Georgia, serif; line-height:1; }
 .tip-left::after { left:auto; right:0; transform:translate(0,-3px); } .tip-left:hover::after { transform:translate(0,0); }
-#info { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:12px; padding:18px 20px; width:min(560px, 92vw); max-height:86vh; box-shadow:0 20px 50px var(--shadow); }
-#info::backdrop { background:var(--overlay); }
-#info h3 { margin:0; font-size:17px; } #info h4 { margin:16px 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
-#info table { width:100%; border-collapse:collapse; } #info th, #info td { text-align:left; vertical-align:top; padding:5px 0; border-top:1px solid var(--line); font-size:13px; }
-#info th { width:140px; font-weight:400; color:var(--muted); padding-right:10px; } #info td { word-break:break-all; user-select:text; }
+body.detail-mode { display:block; } body.detail-mode #side, body.detail-mode main { display:none; }
+#detail { padding:20px 24px 28px; }
+#detail h3 { margin:0 0 4px; font-size:18px; } #detail h4 { margin:18px 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+#detail table { width:100%; border-collapse:collapse; } #detail th, #detail td { text-align:left; vertical-align:top; padding:5px 0; border-top:1px solid var(--line); font-size:13px; }
+#detail th { width:140px; font-weight:400; color:var(--muted); padding-right:10px; } #detail td { word-break:break-all; user-select:text; }

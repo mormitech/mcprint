@@ -21,6 +21,8 @@ export function ExportPDF():Promise<string>;
 
 export function LoadPrefs():Promise<string>;
 
+export function Mode():Promise<string>;
+
 export function MovePage(arg1:number,arg2:number):Promise<Array<main.PageView>>;
 
 export function Pages():Promise<Array<main.PageView>>;
@@ -32,6 +34,8 @@ export function SavePrefs(arg1:string):Promise<void>;
 export function Scan(arg1:main.ScanRequest):Promise<void>;
 
 export function Search():Promise<void>;
+
+export function ShowInfo(arg1:string):Promise<void>;
 
 export function Status(arg1:string):Promise<escl.Status>;
 

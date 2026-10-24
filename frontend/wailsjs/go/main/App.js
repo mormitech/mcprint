@@ -38,6 +38,10 @@ export function LoadPrefs() {
   return window['go']['main']['App']['LoadPrefs']();
 }
 
+export function Mode() {
+  return window['go']['main']['App']['Mode']();
+}
+
 export function MovePage(arg1, arg2) {
   return window['go']['main']['App']['MovePage'](arg1, arg2);
 }
@@ -60,6 +64,10 @@ export function Scan(arg1) {
 
 export function Search() {
   return window['go']['main']['App']['Search']();
+}
+
+export function ShowInfo(arg1) {
+  return window['go']['main']['App']['ShowInfo'](arg1);
 }
 
 export function Status(arg1) {

@@ -8,6 +8,7 @@ import (
 	"image/jpeg"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -68,6 +69,8 @@ type App struct {
 	pages    []*Page
 	nextID   int
 	cancel   context.CancelFunc // set while a scan runs
+	infoGUID string             // set in the details window: the scanner it shows
+	infoWins map[string]*exec.Cmd
 	scanning bool
 }
 
@@ -80,12 +83,18 @@ func NewApp() *App {
 		caps:     map[string]capsEntry{},
 		nextID:   1,
 	}
-	a.loadSession()
 	return a
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	if a.infoGUID != "" { // details window: read the saved device list, no searching and no session
+		a.registry = escl.NewRegistry(filepath.Join(a.cacheDir, "devices.json"), nil)
+		if d, ok := a.registry.Get(a.infoGUID); ok {
+			wruntime.WindowSetTitle(ctx, d.Name+" – details")
+		}
+		return
+	}
 	a.registry = escl.NewRegistry(filepath.Join(a.cacheDir, "devices.json"), func() {
 		wruntime.EventsEmit(a.ctx, "devices", a.registry.List())
 	})
@@ -371,4 +380,49 @@ func (a *App) SavePrefs(js string) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(a.confDir, "prefs.json"), []byte(js), 0o644)
+}
+
+// ---- Details window -----------------------------------------------------------------------------------------
+
+// Mode tells the UI what to show: the app, or the details of one scanner (the guid, in the details window).
+func (a *App) Mode() string { return a.infoGUID }
+
+// ShowInfo opens the details of a scanner in a window of its own: a second copy of this program, started with
+// --info. A scanner that already has its window open is not opened twice.
+func (a *App) ShowInfo(guid string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.infoWins == nil {
+		a.infoWins = map[string]*exec.Cmd{}
+	}
+	if c := a.infoWins[guid]; c != nil && c.ProcessState == nil {
+		return nil
+	}
+	cmd := exec.Command(exe, "--info", guid)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	a.infoWins[guid] = cmd
+	go func() {
+		cmd.Wait()
+		a.mu.Lock()
+		delete(a.infoWins, guid)
+		a.mu.Unlock()
+	}()
+	return nil
+}
+
+// shutdown closes the details windows together with the app.
+func (a *App) shutdown(ctx context.Context) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, c := range a.infoWins {
+		if c.Process != nil {
+			c.Process.Kill()
+		}
+	}
 }

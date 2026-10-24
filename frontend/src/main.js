@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  Devices, Capabilities, Search, AddDevice, RemoveDevice, Choices, Scan, CancelScan, Pages, DeletePage, MovePage,
+  Devices, Capabilities, Mode, ShowInfo, Search, AddDevice, RemoveDevice, Choices, Scan, CancelScan, Pages, DeletePage, MovePage,
   ClearPages, ExportPDF, LoadPrefs, SavePrefs, Status,
 } from '../wailsjs/go/main/App';
 import {EventsOn} from '../wailsjs/runtime/runtime';
@@ -253,6 +253,8 @@ EventsOn('pages', (list) => { pages = list || []; renderPages(); });
 EventsOn('scan', (ev) => { scan = ev; renderControls(); renderPages(); });
 
 (async () => {
+  const infoGuid = await Mode();
+  if (infoGuid) { showDetailsWindow(infoGuid); return; }
   try { prefs = {last: '', devices: {}, ...JSON.parse(await LoadPrefs())}; } catch {}
   pages = (await Pages()) || [];
   renderPages();
@@ -275,13 +277,10 @@ function inputRows(name, i) {
     Largest page: ${i.maxWidth ? `${mm(i.maxWidth)} × ${mm(i.maxHeight)} mm` : '–'}</td></tr>`;
 }
 
-async function showInfo() {
-  const d = devices.find((x) => x.guid === selected);
-  if (!d) return;
-  const dlg = $('info');
+function renderDetails(d, caps, status, err) {
   const base = `${d.scheme}://${d.host.includes(':') ? `[${d.host}]` : d.host}:${d.port}${d.root ? '/' + d.root : ''}`;
-  const draw = (caps, status, err) => {
-    dlg.innerHTML = `<div class="row"><h3>${esc(d.name)}</h3><button id="info-close" class="icon" aria-label="Close">✕</button></div>
+  const alive = status ? 'online' : 'not reachable right now';
+  $('detail').innerHTML = `<h3>${esc(d.name)}</h3>
       <h4>Found on the network</h4>
       <table>
         <tr><th>IP address</th><td>${esc(d.host)}</td></tr>
@@ -292,7 +291,7 @@ async function showInfo() {
         <tr><th>Model (mDNS)</th><td>${esc(d.model) || '–'}</td></tr>
         <tr><th>Scanner ID</th><td>${esc(d.guid)}</td></tr>
         <tr><th>Found by</th><td>${d.manual ? 'added by address' : 'mDNS (Bonjour)'}</td></tr>
-        <tr><th>State</th><td>${d.online ? 'online' : 'offline'}, last seen ${esc(new Date(d.lastSeen).toLocaleString())}</td></tr>
+        <tr><th>State</th><td>${alive}, last seen ${esc(new Date(d.lastSeen).toLocaleString())}</td></tr>
       </table>
       <h4>Reported by the scanner</h4>
       ${err ? `<p class="muted">${esc(err)}</p>` : !caps ? '<p class="muted">Reading…</p>' : `<table>
@@ -303,18 +302,24 @@ async function showInfo() {
         ${caps.feederCapacity ? `<tr><th>Feeder capacity</th><td>${caps.feederCapacity} sheets</td></tr>` : ''}
         ${inputRows('Flatbed', caps.platen)}${inputRows('Feeder, one side', caps.simplex)}${inputRows('Feeder, both sides', caps.duplex)}
       </table>`}`;
-  };
-  draw();
-  if (!dlg.open) dlg.showModal();
+}
+
+// The details window (the program started with --info) shows this instead of the app.
+async function showDetailsWindow(guid) {
+  document.body.classList.add('detail-mode');
+  $('detail').hidden = false;
+  const d = (await Devices()).find((x) => x.guid === guid);
+  if (!d) { $('detail').innerHTML = '<p class="muted">This scanner is not known (any more).</p>'; return; }
+  renderDetails(d);
   try {
-    const [caps, status] = await Promise.all([Capabilities(d.guid), Status(d.guid).catch(() => null)]);
-    draw(caps, status);
+    const [caps, status] = await Promise.all([Capabilities(guid), Status(guid).catch(() => null)]);
+    renderDetails(d, caps, status);
   } catch (e) {
-    draw(null, null, String(e));
+    renderDetails(d, null, null, String(e));
   }
 }
 
-$('controls').addEventListener('click', (ev) => { if (ev.target.closest('#info-btn')) showInfo(); });
-$('info').addEventListener('click', (ev) => {
-  if (ev.target === $('info') || ev.target.closest('#info-close')) $('info').close(); // the backdrop counts as the dialog
+$('controls').addEventListener('click', async (ev) => {
+  if (!ev.target.closest('#info-btn')) return;
+  try { await ShowInfo(selected); } catch (e) { scan = {state: 'error', message: String(e)}; renderControls(); }
 });

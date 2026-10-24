@@ -1,12 +1,12 @@
 :root {
   color-scheme: light dark;
   --bg:#f3f5f9; --panel:#ffffff; --line:#d3dae6; --text:#1b2636; --muted:#5f7391; --accent:#1f7aea; --accent-text:#ffffff;
-  --ok:#1a9460; --bad:#d63b3b; --btn:#eef2f8; --sel:#e6f0fe; --tip:#1b2636; --tip-text:#e6ecf5; --overlay:rgba(240,243,248,.94); --shadow:rgba(30,45,70,.25);
+  --viewer-bg:rgba(226,231,240,.72); --glass:rgba(255,255,255,.72); --glass-line:rgba(120,135,160,.3); --ok:#1a9460; --bad:#d63b3b; --btn:#eef2f8; --sel:#e6f0fe; --tip:#1b2636; --tip-text:#e6ecf5; --overlay:rgba(240,243,248,.94); --shadow:rgba(30,45,70,.25);
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg:#1b2636; --panel:#233247; --line:#344761; --text:#e6ecf5; --muted:#8fa3bf; --accent:#4da3ff; --accent-text:#06223d;
-    --ok:#4cc38a; --bad:#ff6b6b; --btn:#2c3f58; --sel:#2a3f5c; --tip:#0f1824; --tip-text:#e6ecf5; --overlay:rgba(8,14,24,.92); --shadow:rgba(0,0,0,.4);
+    --viewer-bg:rgba(10,16,26,.78); --glass:rgba(35,50,71,.72); --glass-line:rgba(130,150,185,.28); --ok:#4cc38a; --bad:#ff6b6b; --btn:#2c3f58; --sel:#2a3f5c; --tip:#0f1824; --tip-text:#e6ecf5; --overlay:rgba(8,14,24,.92); --shadow:rgba(0,0,0,.4);
   }
 }
 * { box-sizing: border-box; }
@@ -39,8 +39,27 @@ button.danger:hover:not(:disabled) { border-color:var(--bad); }
 #pages { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:14px; }
 .page { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px; display:grid; gap:6px; }
 .page img { width:100%; aspect-ratio:3/4; object-fit:contain; background:#fff; border-radius:4px; cursor:zoom-in; }
-#viewer { position:fixed; inset:0; background:var(--overlay); display:flex; align-items:center; justify-content:center; cursor:zoom-out; z-index:10; }
-#viewer[hidden] { display:none; } #viewer img { max-width:96vw; max-height:96vh; background:#fff; }
+#viewer { position:fixed; inset:0; z-index:10; opacity:0; transition:opacity .18s ease; overflow:hidden; user-select:none; -webkit-user-select:none;
+  background:var(--viewer-bg); -webkit-backdrop-filter:blur(22px) saturate(1.2); backdrop-filter:blur(22px) saturate(1.2); }
+#viewer.open { opacity:1; } #viewer[hidden] { display:none; }
+#viewer .stage { position:absolute; inset:0; cursor:default; touch-action:none; }
+#viewer.zoomed .stage { cursor:grab; } #viewer.panning .stage, #viewer.panning .stage * { cursor:grabbing; }
+#viewer .stage img { position:absolute; left:0; top:0; transform-origin:0 0; max-width:none; background:#fff; border-radius:2px;
+  box-shadow:0 1px 3px rgba(0,0,0,.25), 0 18px 60px rgba(0,0,0,.35); will-change:transform; }
+#viewer .bar, #viewer .nav, #viewer .hint { position:absolute; display:flex; align-items:center; gap:2px; padding:4px; border-radius:999px;
+  background:var(--glass); border:1px solid var(--glass-line); color:var(--text); box-shadow:0 6px 24px var(--shadow);
+  -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
+#viewer .bar { top:16px; } #viewer .bar.left { left:16px; padding:7px 14px; font-size:13px; } #viewer .bar.mid { left:50%; transform:translateX(-50%); }
+#viewer .bar.right { right:16px; }
+#viewer .pct { min-width:52px; text-align:center; font-size:13px; font-variant-numeric:tabular-nums; }
+#viewer button { width:32px; height:32px; padding:0; display:grid; place-items:center; border:none; border-radius:50%; background:none; color:inherit; }
+#viewer button:hover:not(:disabled) { background:var(--btn); } #viewer button:disabled { opacity:.3; }
+#viewer button svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+#viewer .nav { top:50%; transform:translateY(-50%); padding:0; } #viewer .nav button, #viewer button.nav { width:44px; height:44px; }
+#viewer .nav.prev { left:18px; } #viewer .nav.next { right:18px; }
+#viewer .nav svg { width:22px; height:22px; }
+#viewer .hint { left:50%; bottom:22px; transform:translateX(-50%); padding:7px 16px; font-size:12px; color:var(--muted); pointer-events:none; transition:opacity .4s; }
+#viewer.hint-gone .hint { opacity:0; }
 #search .ico { display:inline-block; } #search.spin .ico { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
 .tip { position:relative; }
 .tip::after { content:attr(data-tip); position:absolute; left:50%; top:calc(100% + 8px); transform:translate(-50%,-3px); white-space:nowrap; pointer-events:none;

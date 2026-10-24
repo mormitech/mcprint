@@ -236,12 +236,10 @@ $('pages').addEventListener('click', async (ev) => {
   if (justDragged) { justDragged = false; return; } // the click that ends a drag is not a click
   const t = ev.target.closest('[data-view], [data-del], [data-move]') || ev.target;
   const id = Number(t.closest('.page')?.dataset.id);
-  if (t.dataset.view) { $('viewer').innerHTML = `<img src="/page/${t.dataset.view}.jpg">`; $('viewer').hidden = false; }
+  if (t.dataset.view) openViewer(Number(t.dataset.view), t);
   else if (t.dataset.del) deleteCard(id);
   else if (t.dataset.move) moveCard(id, Number(t.dataset.move));
 });
-$('viewer').addEventListener('click', () => { $('viewer').hidden = true; });
-document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') $('viewer').hidden = true; });
 
 $('pages-bar').addEventListener('click', async (ev) => {
   if (ev.target.id === 'clear') { pages = await ClearPages(); renderPages(); }
@@ -561,3 +559,211 @@ document.addEventListener('click', (ev) => {
   const a = ev.target.closest('a[href^="http"]');
   if (a) { ev.preventDefault(); BrowserOpenURL(a.href); }
 });
+
+// ---- Page viewer -----------------------------------------------------------------------------------------
+// Opens over the window when a page is clicked. Scroll wheel (or a pinch on the trackpad) zooms around the pointer,
+// dragging moves the page, a double click toggles between fit and zoomed, and the arrow keys flip through the pages.
+
+const VIEW_ICON = {
+  left: GLYPH.left, right: GLYPH.right,
+  close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 6.5 11 11m0-11-11 11"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg>',
+  minus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12h13"/></svg>',
+  fit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M19.5 15v4.5H15M9 19.5H4.5V15"/></svg>',
+};
+
+let view = null; // {idx, s, x, y, fit, nw, nh, drag, hintTimer}
+
+const vStage = () => $('viewer').querySelector('.stage');
+const vImg = () => $('viewer').querySelector('.stage img');
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+function viewerBounds() {
+  const r = vStage().getBoundingClientRect();
+  return {w: r.width, h: r.height, left: r.left, top: r.top};
+}
+
+// Keeps the page on the screen: smaller than the window it is centred, bigger it cannot leave a gap.
+function constrain() {
+  const b = viewerBounds();
+  const w = view.nw * view.s, h = view.nh * view.s;
+  view.x = w <= b.w ? (b.w - w) / 2 : clamp(view.x, b.w - w, 0);
+  view.y = h <= b.h ? (b.h - h) / 2 : clamp(view.y, b.h - h, 0);
+}
+
+function applyView(smooth) {
+  const img = vImg();
+  img.style.transition = smooth ? 'transform .22s cubic-bezier(.2,.8,.2,1)' : 'none';
+  img.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.s})`;
+  const pct = Math.round(view.s / view.fit * 100);
+  $('viewer').querySelector('.pct').textContent = `${pct}%`;
+  $('viewer').classList.toggle('zoomed', view.s > view.fit * 1.001);
+}
+
+const maxScale = () => Math.max(view.fit * 12, 1.5);
+const minScale = () => view.fit * 0.6;
+
+// Zooms by a factor, keeping the point (px, py), in stage coordinates, where it is.
+function zoomBy(factor, px, py, smooth) {
+  const b = viewerBounds();
+  px ??= b.w / 2; py ??= b.h / 2;
+  const s = clamp(view.s * factor, minScale(), maxScale());
+  const k = s / view.s;
+  view.x = px - (px - view.x) * k;
+  view.y = py - (py - view.y) * k;
+  view.s = s;
+  constrain();
+  applyView(smooth);
+}
+
+function fitView(smooth) {
+  const b = viewerBounds();
+  view.fit = Math.min((b.w - 120) / view.nw, (b.h - 150) / view.nh);
+  view.s = view.fit;
+  view.x = view.y = 0;
+  constrain();
+  applyView(smooth);
+}
+
+function showPage(idx, from) {
+  const p = pages[idx];
+  view.idx = idx;
+  view.nw = p.width; view.nh = p.height;
+  const img = vImg();
+  img.width = p.width; img.height = p.height;
+  img.src = `/page/${p.id}.jpg`;
+  $('viewer').querySelector('.count').textContent = `Page ${idx + 1} of ${pages.length}`;
+  $('viewer').querySelector('[data-v="prev"]').disabled = idx === 0;
+  $('viewer').querySelector('[data-v="next"]').disabled = idx === pages.length - 1;
+  fitView(false);
+  if (from) { // grow out of the thumbnail that was clicked
+    const b = viewerBounds(), r = from.getBoundingClientRect();
+    const target = {x: view.x, y: view.y, s: view.s};
+    view.s = r.width / p.width;
+    view.x = r.left - b.left; view.y = r.top - b.top;
+    applyView(false);
+    img.getBoundingClientRect(); // make the start position count
+    Object.assign(view, target);
+    applyView(true);
+  }
+}
+
+function openViewer(id, thumb) {
+  const idx = pages.findIndex((p) => p.id === id);
+  if (idx < 0) return;
+  const el = $('viewer');
+  el.innerHTML = `
+    <div class="stage"><img alt="" draggable="false"></div>
+    <div class="bar left"><span class="count"></span></div>
+    <div class="bar mid">
+      <button data-v="out" title="Zoom out (−)" aria-label="Zoom out">${VIEW_ICON.minus}</button>
+      <span class="pct">100%</span>
+      <button data-v="in" title="Zoom in (+)" aria-label="Zoom in">${VIEW_ICON.plus}</button>
+      <button data-v="fit" title="Fit to window (0)" aria-label="Fit to window">${VIEW_ICON.fit}</button>
+    </div>
+    <div class="bar right"><button data-v="close" title="Close (Esc)" aria-label="Close">${VIEW_ICON.close}</button></div>
+    <button class="nav prev" data-v="prev" title="Previous page (←)" aria-label="Previous page">${VIEW_ICON.left}</button>
+    <button class="nav next" data-v="next" title="Next page (→)" aria-label="Next page">${VIEW_ICON.right}</button>
+    <div class="hint">Scroll to zoom · drag to move · double-click to fit or zoom in</div>`;
+  el.hidden = false;
+  el.classList.remove('closing');
+  view = {idx, s: 1, x: 0, y: 0, fit: 1, nw: 1, nh: 1, drag: null};
+  requestAnimationFrame(() => el.classList.add('open'));
+  showPage(idx, thumb);
+  clearTimeout(view.hintTimer);
+  view.hintTimer = setTimeout(() => el.classList.add('hint-gone'), 3500);
+  el.classList.remove('hint-gone');
+}
+
+function closeViewer() {
+  if (!view) return;
+  const el = $('viewer');
+  view = null;
+  el.classList.remove('open');
+  setTimeout(() => { if (!view) { el.hidden = true; el.innerHTML = ''; } }, 180);
+}
+
+function flip2(delta) {
+  const i = view.idx + delta;
+  if (i >= 0 && i < pages.length) showPage(i);
+}
+
+$('viewer').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-v]');
+  if (!b || !view) return;
+  const a = b.dataset.v;
+  if (a === 'close') closeViewer();
+  else if (a === 'in') zoomBy(1.4, null, null, true);
+  else if (a === 'out') zoomBy(1 / 1.4, null, null, true);
+  else if (a === 'fit') fitView(true);
+  else if (a === 'prev') flip2(-1);
+  else if (a === 'next') flip2(1);
+});
+
+// Wheel: zoom around the pointer. A sideways scroll (or shift) moves the page, as does a pinch's ctrl-wheel on
+// systems that report pinches that way, which zooms instead.
+$('viewer').addEventListener('wheel', (ev) => {
+  if (!view) return;
+  ev.preventDefault();
+  const b = viewerBounds();
+  const px = ev.clientX - b.left, py = ev.clientY - b.top;
+  if (ev.ctrlKey) { zoomBy(Math.exp(-ev.deltaY * 0.012), px, py); return; } // pinch
+  if (ev.deltaX && Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) { // two-finger sideways scroll
+    view.x -= ev.deltaX; constrain(); applyView(false); return;
+  }
+  zoomBy(Math.exp(-ev.deltaY * (ev.deltaMode === 1 ? 0.05 : 0.0016)), px, py);
+}, {passive: false});
+
+// Pinch on the macOS trackpad arrives as gesture events in WebKit.
+let pinch = null;
+$('viewer').addEventListener('gesturestart', (ev) => { ev.preventDefault(); if (view) pinch = view.s; });
+$('viewer').addEventListener('gesturechange', (ev) => {
+  ev.preventDefault();
+  if (!view || pinch === null) return;
+  const b = viewerBounds();
+  zoomBy((pinch * ev.scale) / view.s, ev.clientX - b.left, ev.clientY - b.top);
+});
+$('viewer').addEventListener('gestureend', (ev) => { ev.preventDefault(); pinch = null; });
+
+// Drag to move; a click on the empty background closes the viewer.
+$('viewer').addEventListener('pointerdown', (ev) => {
+  if (!view || ev.button !== 0 || ev.target.closest('button, .bar')) return;
+  view.drag = {x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y, moved: false, onImage: ev.target.tagName === 'IMG'};
+  $('viewer').setPointerCapture(ev.pointerId);
+});
+$('viewer').addEventListener('pointermove', (ev) => {
+  const d = view?.drag;
+  if (!d) return;
+  const dx = ev.clientX - d.x, dy = ev.clientY - d.y;
+  if (!d.moved && Math.hypot(dx, dy) < 4) return;
+  d.moved = true;
+  $('viewer').classList.add('panning');
+  view.x = d.vx + dx; view.y = d.vy + dy;
+  constrain(); applyView(false);
+});
+$('viewer').addEventListener('pointerup', (ev) => {
+  const d = view?.drag;
+  if (!d) return;
+  view.drag = null;
+  $('viewer').classList.remove('panning');
+  if (!d.moved && !d.onImage) closeViewer();
+});
+$('viewer').addEventListener('dblclick', (ev) => {
+  if (!view || ev.target.closest('button, .bar')) return;
+  const b = viewerBounds();
+  if (view.s > view.fit * 1.05) fitView(true);
+  else zoomBy(Math.min(maxScale(), Math.max(2.5 * view.fit, 1)) / view.s, ev.clientX - b.left, ev.clientY - b.top, true);
+});
+
+window.addEventListener('resize', () => { if (view) { const was = view.s / view.fit; fitView(false); zoomBy(was, null, null); } });
+document.addEventListener('keydown', (ev) => {
+  if (!view) return;
+  if (ev.key === 'Escape') { closeViewer(); ev.stopImmediatePropagation(); }
+  else if (ev.key === 'ArrowLeft') flip2(-1);
+  else if (ev.key === 'ArrowRight') flip2(1);
+  else if (ev.key === '+' || ev.key === '=') zoomBy(1.4, null, null, true);
+  else if (ev.key === '-') zoomBy(1 / 1.4, null, null, true);
+  else if (ev.key === '0') fitView(true);
+}, true);
+// the page being viewed was deleted or the list changed under it: close rather than show something stale
+EventsOn('pages', (list) => { if (view && !(list || []).some((p) => p.id === pages[view.idx]?.id)) closeViewer(); });

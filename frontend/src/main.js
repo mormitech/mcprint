@@ -121,7 +121,8 @@ function renderControls() {
       <label>Paper<select id="o-paper" ${busy ? 'disabled' : ''}>${choices.papers.map((p) => opt(PAPER, p, opts.paper)).join('')}</select></label>
       ${busy
         ? '<button id="cancel" class="danger">Cancel</button>'
-        : `<button id="scan" class="primary" ${d.online ? '' : 'disabled'}>Scan</button>`}
+        : `<div class="scanbox"><button id="scan" class="primary" ${d.online ? '' : 'disabled'}>Scan</button>
+             <span class="hint">${pages.length ? `adds page ${pages.length + 1} to this document` : 'starts a new document'}</span></div>`}
     </div>`;
   } else if (!scan.message) {
     form = '<p class="empty">Reading what the scanner can do…</p>';
@@ -162,6 +163,7 @@ $('controls').addEventListener('click', async (ev) => {
 // ---- Pages -----------------------------------------------------------------------------------------------
 
 function renderPages() {
+  renderControls();
   const bar = $('pages-bar');
   bar.innerHTML = pages.length
     ? `<span class="grow">${pages.length} page${pages.length === 1 ? '' : 's'}</span>

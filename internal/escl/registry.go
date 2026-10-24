@@ -118,7 +118,9 @@ type entry struct {
 type Registry struct {
 	path     string
 	onChange func()
-	kick     chan struct{}
+	// OnSweep, if set, is called with true when a search starts and false when it ends.
+	OnSweep func(searching bool)
+	kick    chan struct{}
 
 	mu   sync.Mutex
 	devs map[string]*entry
@@ -207,7 +209,13 @@ func (r *Registry) Search() {
 // Run searches until ctx ends: a 4 s listen window, then a pause, repeated. A search can be triggered with Search.
 func (r *Registry) Run(ctx context.Context) {
 	for {
+		if r.OnSweep != nil {
+			r.OnSweep(true)
+		}
 		r.sweep(ctx, 4*time.Second)
+		if r.OnSweep != nil {
+			r.OnSweep(false)
+		}
 		select {
 		case <-ctx.Done():
 			return

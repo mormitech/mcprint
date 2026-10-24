@@ -87,6 +87,7 @@ func (a *App) startup(ctx context.Context) {
 	a.registry = escl.NewRegistry(filepath.Join(a.cacheDir, "devices.json"), func() {
 		wruntime.EventsEmit(a.ctx, "devices", a.registry.List())
 	})
+	a.registry.OnSweep = func(searching bool) { wruntime.EventsEmit(a.ctx, "searching", searching) }
 	go a.registry.Run(ctx)
 }
 

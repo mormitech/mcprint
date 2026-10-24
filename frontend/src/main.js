@@ -202,7 +202,7 @@ $('pages-bar').addEventListener('click', async (ev) => {
 
 // ---- Add / search ----------------------------------------------------------------------------------------
 
-$('search').addEventListener('click', () => Search());
+$('search').addEventListener('click', () => { spinUntil = Date.now() + 1000; $('search').classList.add('spin'); Search(); });
 $('devices').addEventListener('click', async (ev) => {
   const rm = ev.target.dataset.rm;
   if (rm) {
@@ -233,6 +233,12 @@ $('add').addEventListener('submit', async (ev) => {
 // ---- Start -----------------------------------------------------------------------------------------------
 
 EventsOn('devices', (list) => setDevices(list));
+// the refresh button spins while a search runs, and at least a moment so a click is always visible
+let spinUntil = 0;
+EventsOn('searching', (on) => {
+  if (on) { $('search').classList.add('spin'); return; }
+  setTimeout(() => $('search').classList.remove('spin'), Math.max(0, spinUntil - Date.now()));
+});
 EventsOn('pages', (list) => { pages = list || []; renderPages(); });
 EventsOn('scan', (ev) => { scan = ev; renderControls(); renderPages(); });
 

@@ -39,8 +39,6 @@ button.danger:hover:not(:disabled) { border-color:var(--bad); }
 #pages { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:14px; }
 .page { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px; display:grid; gap:6px; }
 .page img { width:100%; aspect-ratio:3/4; object-fit:contain; background:#fff; border-radius:4px; cursor:zoom-in; }
-.page .tools { display:flex; gap:4px; align-items:center; } .page .tools span { flex:1; color:var(--muted); font-size:12px; }
-.page .tools button { padding:2px 8px; }
 #viewer { position:fixed; inset:0; background:var(--overlay); display:flex; align-items:center; justify-content:center; cursor:zoom-out; z-index:10; }
 #viewer[hidden] { display:none; } #viewer img { max-width:96vw; max-height:96vh; background:#fff; }
 #search .ico { display:inline-block; } #search.spin .ico { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
@@ -69,4 +67,12 @@ body.dragging, body.dragging * { cursor:grabbing !important; }
 .seg button.on { background:var(--accent); color:var(--accent-text); box-shadow:0 1px 3px var(--shadow); }
 .seg button:disabled { opacity:1; cursor:default; } .seg button:disabled:not(.on) { opacity:.45; }
 .seg button span { white-space:nowrap; }
-.page .tools span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+
+#pages { align-items:start; }
+.page { min-width:0; overflow:hidden; } .page > * { min-width:0; }
+.page img { display:block; max-width:100%; }
+.page .tools { display:flex; align-items:center; gap:4px; }
+.page .tools .label { flex:1; display:flex; align-items:baseline; gap:6px; overflow:hidden; white-space:nowrap; }
+.page .tools .n { font-size:14px; } .page .tools small { color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; }
+.page .tools button.ic { width:26px; height:26px; padding:0; flex:none; display:grid; place-items:center; border-radius:6px; }
+.page .tools button.ic svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }

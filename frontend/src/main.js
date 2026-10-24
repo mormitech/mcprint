@@ -14,6 +14,11 @@ const ICON = {
   platen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11 7.5 5h12.5l-2.5 6"/><rect x="3" y="11" width="18" height="8" rx="2"/><path d="M6.5 15h11"/></svg>',
   feeder: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2.5" width="8" height="7.5" rx="1"/><path d="M12 4.5v3.3m-1.7-1.6 1.7 1.7 1.7-1.7"/><rect x="3" y="12" width="18" height="8" rx="2"/><path d="M7 16h10"/></svg>',
 };
+const GLYPH = {
+  left: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg>',
+  right: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M10 7V4.5h4V7M6.5 7l.8 12.5h9.4L17.5 7M10 11v5.5M14 11v5.5"/></svg>',
+};
 const PAPER = {a4: 'A4', a5: 'A5', letter: 'Letter', legal: 'Legal', max: 'Largest'};
 
 let devices = [];
@@ -194,17 +199,17 @@ function renderPages() {
     <div class="page" data-id="${p.id}">
       <img src="/page/${p.id}.jpg" alt="Page ${i + 1}" data-view="${p.id}" loading="lazy" draggable="false">
       <div class="tools">
-        <span><span class="n">${i + 1}</span> · ${p.width}×${p.height}</span>
-        <button data-move="-1" ${i === 0 ? 'disabled' : ''} title="Move earlier">←</button>
-        <button data-move="1" ${i === pages.length - 1 ? 'disabled' : ''} title="Move later">→</button>
-        <button data-del="1" class="danger" title="Delete page">✕</button>
+        <span class="label"><b class="n">${i + 1}</b><small>${p.width}×${p.height}</small></span>
+        <button class="ic" data-move="-1" ${i === 0 ? 'disabled' : ''} title="Move earlier" aria-label="Move earlier">${GLYPH.left}</button>
+        <button class="ic" data-move="1" ${i === pages.length - 1 ? 'disabled' : ''} title="Move later" aria-label="Move later">${GLYPH.right}</button>
+        <button class="ic danger" data-del="1" title="Delete page" aria-label="Delete page">${GLYPH.trash}</button>
       </div>
     </div>`).join('');
 }
 
 $('pages').addEventListener('click', async (ev) => {
   if (justDragged) { justDragged = false; return; } // the click that ends a drag is not a click
-  const t = ev.target;
+  const t = ev.target.closest('[data-view], [data-del], [data-move]') || ev.target;
   const id = Number(t.closest('.page')?.dataset.id);
   if (t.dataset.view) { $('viewer').innerHTML = `<img src="/page/${t.dataset.view}.jpg">`; $('viewer').hidden = false; }
   else if (t.dataset.del) { pages = await DeletePage(id); renderPages(); }

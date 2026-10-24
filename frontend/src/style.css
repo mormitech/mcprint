@@ -36,7 +36,7 @@ button.danger:hover:not(:disabled) { border-color:var(--bad); }
 .form label.check { display:flex; align-items:center; gap:6px; padding-bottom:7px; color:var(--text); font-size:14px; }
 .state { margin-top:10px; font-size:13px; color:var(--muted); } .state.error { color:var(--bad); } .state.done { color:var(--ok); }
 #pages-bar { display:flex; gap:8px; align-items:center; } #pages-bar .grow { flex:1; color:var(--muted); }
-#pages { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:14px; }
+#pages { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:14px; }
 .page { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px; display:grid; gap:6px; }
 .page img { width:100%; aspect-ratio:3/4; object-fit:contain; background:#fff; border-radius:4px; cursor:zoom-in; }
 .page .tools { display:flex; gap:4px; align-items:center; } .page .tools span { flex:1; color:var(--muted); font-size:12px; }
@@ -68,3 +68,5 @@ body.dragging, body.dragging * { cursor:grabbing !important; }
 .seg button:hover:not(:disabled):not(.on) { color:var(--text); }
 .seg button.on { background:var(--accent); color:var(--accent-text); box-shadow:0 1px 3px var(--shadow); }
 .seg button:disabled { opacity:1; cursor:default; } .seg button:disabled:not(.on) { opacity:.45; }
+.seg button span { white-space:nowrap; }
+.page .tools span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }

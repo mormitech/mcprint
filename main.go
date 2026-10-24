@@ -48,7 +48,7 @@ func infoFlag(args []string) string {
 
 func main() {
 	app := NewApp()
-	title, width, height := "mcprint v"+version(), 1024, 768
+	title, width, height := "mcprint v"+version(), 1440, 800
 	if guid := infoFlag(os.Args[1:]); guid != "" {
 		app.infoGUID = guid
 		title, width, height = "Scanner details", 600, 720

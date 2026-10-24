@@ -208,6 +208,17 @@ func (r *Registry) Search() {
 
 // Run searches until ctx ends: a 4 s listen window, then a pause, repeated. A search can be triggered with Search.
 func (r *Registry) Run(ctx context.Context) {
+	// The saved scanners are asked directly first, so they are online at once instead of after the first search.
+	r.mu.Lock()
+	var known []string
+	for guid := range r.devs {
+		known = append(known, guid)
+	}
+	r.mu.Unlock()
+	if len(known) > 0 {
+		r.probe(ctx, known)
+		r.changed()
+	}
 	for {
 		if r.OnSweep != nil {
 			r.OnSweep(true)
@@ -289,12 +300,18 @@ func (r *Registry) sweep(ctx context.Context, window time.Duration) {
 	}
 	r.mu.Unlock()
 
-	// A scanner that missed the mDNS window may still be there: ask it directly before calling it offline.
-	var pw sync.WaitGroup
-	for _, guid := range unseen {
-		pw.Add(1)
+	r.probe(ctx, unseen)
+	r.changed()
+}
+
+// probe asks known scanners directly (a status request) and updates whether they are online. A scanner is only
+// called offline after two missed rounds.
+func (r *Registry) probe(ctx context.Context, guids []string) {
+	var wg sync.WaitGroup
+	for _, guid := range guids {
+		wg.Add(1)
 		go func(guid string) {
-			defer pw.Done()
+			defer wg.Done()
 			d, ok := r.Get(guid)
 			if !ok {
 				return
@@ -319,8 +336,7 @@ func (r *Registry) sweep(ctx context.Context, window time.Duration) {
 			}
 		}(guid)
 	}
-	pw.Wait()
-	r.changed()
+	wg.Wait()
 }
 
 // Add probes an address typed by the user ("192.168.1.20", "host:8080" or a full eSCL URL) and remembers the scanner.

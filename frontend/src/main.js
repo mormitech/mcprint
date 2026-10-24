@@ -104,8 +104,10 @@ async function loadChoices() {
 
 // ---- Scan form -------------------------------------------------------------------------------------------
 
-function opt(map, value, current) {
-  return `<option value="${esc(value)}" ${value === current ? 'selected' : ''}>${esc(map[value] ?? value)}</option>`;
+// A row of buttons of which one is selected. icon is optional; a lone option is shown but cannot be changed.
+function seg(label, key, items, current, disabled) {
+  return `<div class="field">${label}<div class="seg" role="radiogroup" aria-label="${label}">${items.map((it) =>
+    `<button type="button" role="radio" aria-checked="${it.value === current}" class="${it.value === current ? 'on' : ''}" data-seg="${key}" data-value="${esc(it.value)}" ${disabled || items.length < 2 ? 'disabled' : ''}>${it.icon || ''}<span>${esc(it.label)}</span></button>`).join('')}</div></div>`;
 }
 
 function renderControls() {
@@ -119,12 +121,13 @@ function renderControls() {
   let form = '';
   if (ready && choices) {
     form = `<div class="form">
-      <div class="field">Source<div class="seg" role="radiogroup" aria-label="Source">${choices.sources.map((s) =>
-        `<button type="button" role="radio" aria-checked="${s === opts.source}" class="${s === opts.source ? 'on' : ''}" data-source="${s}" ${busy || choices.sources.length < 2 ? 'disabled' : ''}>${ICON[s]}<span>${SOURCE[s]}</span></button>`).join('')}</div></div>
+      ${seg('Source', 'source', choices.sources.map((v) => ({value: v, label: SOURCE[v], icon: ICON[v]})), opts.source, busy)}
       ${choices.canDuplex && opts.source === 'feeder' ? `<label class="check"><input type="checkbox" id="o-duplex" ${opts.duplex ? 'checked' : ''} ${busy ? 'disabled' : ''}> Both sides</label>` : ''}
-      <label>Colour<select id="o-color" ${busy ? 'disabled' : ''}>${choices.colors.map((c) => opt(COLOR, c, opts.color)).join('')}</select></label>
-      <label>Resolution<select id="o-dpi" ${busy ? 'disabled' : ''}>${choices.dpis.map((v) => `<option value="${v}" ${v === opts.dpi ? 'selected' : ''}>${v} dpi</option>`).join('')}</select></label>
-      <label>Paper<select id="o-paper" ${busy ? 'disabled' : ''}>${choices.papers.map((p) => opt(PAPER, p, opts.paper)).join('')}</select></label>
+      ${seg('Colour', 'color', choices.colors.map((v) => ({value: v, label: COLOR[v] ?? v})), opts.color, busy)}
+      ${choices.dpis.length <= 6
+        ? seg('Resolution', 'dpi', choices.dpis.map((v) => ({value: String(v), label: `${v} dpi`})), String(opts.dpi), busy)
+        : `<label>Resolution<select id="o-dpi" ${busy ? 'disabled' : ''}>${choices.dpis.map((v) => `<option value="${v}" ${v === opts.dpi ? 'selected' : ''}>${v} dpi</option>`).join('')}</select></label>`}
+      ${seg('Paper', 'paper', choices.papers.map((v) => ({value: v, label: PAPER[v] ?? v})), opts.paper, busy)}
       ${busy
         ? '<button id="cancel" class="danger">Cancel</button>'
         : `<button id="scan" class="primary tip" data-tip="${pages.length ? `Adds page ${pages.length + 1} to this document` : 'Starts a new document'}" ${d.online ? '' : 'disabled'}>${pages.length ? '+ ' : ''}Scan</button>`}
@@ -140,9 +143,7 @@ function renderControls() {
 $('controls').addEventListener('change', async (ev) => {
   const t = ev.target;
   if (t.id === 'o-duplex') opts.duplex = t.checked;
-  else if (t.id === 'o-color') opts.color = t.value;
   else if (t.id === 'o-dpi') opts.dpi = Number(t.value);
-  else if (t.id === 'o-paper') opts.paper = t.value;
   else return;
   if (t.id === 'o-duplex') {
     try { await loadChoices(); } catch (e) { scan = {state: 'error', message: String(e)}; }
@@ -152,11 +153,16 @@ $('controls').addEventListener('change', async (ev) => {
 });
 
 $('controls').addEventListener('click', async (ev) => {
-  const src = ev.target.closest('[data-source]');
-  if (src && src.dataset.source !== opts.source) {
-    opts.source = src.dataset.source;
-    opts.duplex = false;
-    try { await loadChoices(); } catch (e) { scan = {state: 'error', message: String(e)}; }
+  const sg = ev.target.closest('[data-seg]');
+  if (sg) {
+    const {seg: key, value} = sg.dataset;
+    if (key === 'dpi') opts.dpi = Number(value);
+    else if (opts[key] === value) return;
+    else opts[key] = value;
+    if (key === 'source') {
+      opts.duplex = false;
+      try { await loadChoices(); } catch (e) { scan = {state: 'error', message: String(e)}; }
+    }
     renderControls();
     savePrefs();
     return;

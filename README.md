@@ -91,7 +91,7 @@ On Linux also `libgtk-3-dev libwebkit2gtk-4.1-dev`, and build with `-tags webkit
 | `frontend/` | the UI (vanilla JS, built with Vite) |
 | `packaging/windows` | the Inno Setup installer script |
 | `mock.go`, `mock/` | demo mode: made-up scanners and pages (`scripts/make-mock.mjs` draws the pages) |
-| `scripts/` | generators for the Homebrew cask and formula (`make-cask.mjs`, `make-formula.mjs`) |
+| `scripts/` | generator for the Homebrew cask, one for macOS and Linux (`make-cask.mjs`) |
 | `.github/workflows/build.yml` | builds, tests and packages on macOS, Windows and Linux; publishes the release on a tag |
 
 The window has one process per window (Wails v2): the About window and a scanner's details window are the same program started

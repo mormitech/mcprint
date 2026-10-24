@@ -74,12 +74,14 @@ type App struct {
 func NewApp() *App {
 	cache, _ := os.UserCacheDir()
 	conf, _ := os.UserConfigDir()
-	return &App{
+	a := &App{
 		cacheDir: filepath.Join(cache, "mcprint"),
 		confDir:  filepath.Join(conf, "mcprint"),
 		caps:     map[string]capsEntry{},
 		nextID:   1,
 	}
+	a.loadSession()
+	return a
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -209,8 +211,11 @@ func (a *App) Scan(req ScanRequest) error {
 				return // not an image, ignore
 			}
 			a.mu.Lock()
-			a.pages = append(a.pages, &Page{ID: a.nextID, Data: data, Width: cfg.Width, Height: cfg.Height, DPI: resolved.DPI})
+			p := &Page{ID: a.nextID, Data: data, Width: cfg.Width, Height: cfg.Height, DPI: resolved.DPI}
 			a.nextID++
+			a.pages = append(a.pages, p)
+			a.writePageFile(p)
+			a.saveSession()
 			a.mu.Unlock()
 			count++
 			a.emitPages()
@@ -261,6 +266,8 @@ func (a *App) DeletePage(id int) []PageView {
 	for i, p := range a.pages {
 		if p.ID == id {
 			a.pages = append(a.pages[:i:i], a.pages[i+1:]...)
+			a.removePageFile(id)
+			a.saveSession()
 			break
 		}
 	}
@@ -276,6 +283,7 @@ func (a *App) MovePage(id, delta int) []PageView {
 			j := i + delta
 			if j >= 0 && j < len(a.pages) {
 				a.pages[i], a.pages[j] = a.pages[j], a.pages[i]
+				a.saveSession()
 			}
 			break
 		}
@@ -288,6 +296,7 @@ func (a *App) MovePage(id, delta int) []PageView {
 func (a *App) ClearPages() []PageView {
 	a.mu.Lock()
 	a.pages = nil
+	a.saveSession() // removes the session folder
 	a.mu.Unlock()
 	return a.Pages()
 }

@@ -14,7 +14,8 @@ arrive and saves them as one PDF.
 - **Selectable scanners.** Pick one in the list; its capabilities (sources, colour modes, resolutions, paper sizes, two-sided) decide what the form offers,
   and your choices are remembered per scanner.
 - **Scan.** Pages appear one by one while the feeder works; Cancel stops the job on the scanner. Reorder or delete pages, click one to enlarge, **Save as PDF**.
-- **Safe.** Only local-network addresses are ever contacted. Nothing is uploaded; the only files written are the device cache and your preferences.
+- **Remembers the session.** Scanned pages are kept in the user's cache folder (`~/Library/Caches/mcprint/session`, `%LocalAppData%\mcprint\session`, `~/.cache/mcprint/session`) and come back when the app is reopened, until you clear them.
+- **Safe.** Only local-network addresses are ever contacted. Nothing is uploaded; the only files written are the device cache, the last session's pages and your preferences.
 
 Only network scanners (eSCL) for now; USB-only scanners are not supported. See [docs/scanner-protocol.md](docs/scanner-protocol.md).
 

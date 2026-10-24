@@ -202,7 +202,13 @@ $('pages-bar').addEventListener('click', async (ev) => {
 
 // ---- Add / search ----------------------------------------------------------------------------------------
 
-$('search').addEventListener('click', () => { spinUntil = Date.now() + 1000; $('search').classList.add('spin'); Search(); });
+$('search').addEventListener('click', () => {
+  manual = {started: Date.now(), seen: false};
+  $('search').disabled = true;
+  $('search').classList.add('spin');
+  setTimeout(() => { if (manual && Date.now() - manual.started >= 15000) endManual(); }, 15000);
+  Search();
+});
 $('devices').addEventListener('click', async (ev) => {
   const rm = ev.target.dataset.rm;
   if (rm) {
@@ -233,11 +239,14 @@ $('add').addEventListener('submit', async (ev) => {
 // ---- Start -----------------------------------------------------------------------------------------------
 
 EventsOn('devices', (list) => setDevices(list));
-// the refresh button spins while a search runs, and at least a moment so a click is always visible
-let spinUntil = 0;
+// After a click on the refresh button the icon spins and the button is disabled until that search has ended
+// (at least a moment, so a click is always visible). Searches in the background do not touch the button.
+let manual = null;            // {started: ms, seen: a search started after the click}
+const endManual = () => { manual = null; $('search').disabled = false; $('search').classList.remove('spin'); };
 EventsOn('searching', (on) => {
-  if (on) { $('search').classList.add('spin'); return; }
-  setTimeout(() => $('search').classList.remove('spin'), Math.max(0, spinUntil - Date.now()));
+  if (!manual) return;
+  if (on) { manual.seen = true; return; }
+  if (manual.seen) setTimeout(endManual, Math.max(0, manual.started + 1000 - Date.now()));
 });
 EventsOn('pages', (list) => { pages = list || []; renderPages(); });
 EventsOn('scan', (ev) => { scan = ev; renderControls(); renderPages(); });

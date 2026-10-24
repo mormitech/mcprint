@@ -213,7 +213,7 @@ $('pages').addEventListener('click', async (ev) => {
   const id = Number(t.closest('.page')?.dataset.id);
   if (t.dataset.view) { $('viewer').innerHTML = `<img src="/page/${t.dataset.view}.jpg">`; $('viewer').hidden = false; }
   else if (t.dataset.del) { pages = await DeletePage(id); renderPages(); }
-  else if (t.dataset.move) { pages = await MovePage(id, Number(t.dataset.move)); renderPages(); }
+  else if (t.dataset.move) moveCard(id, Number(t.dataset.move));
 });
 $('viewer').addEventListener('click', () => { $('viewer').hidden = true; });
 document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') $('viewer').hidden = true; });
@@ -381,6 +381,49 @@ function renumber() {
   });
 }
 
+// FLIP: runs mutate(), which reorders the cards, and slides every card from where it was to where it is now.
+// The card in `lift` travels slightly raised and bigger, so it is clear which one moved.
+function flip(mutate, lift) {
+  const grid = $('pages');
+  const before = new Map([...grid.children].map((c) => [c, c.getBoundingClientRect()]));
+  mutate();
+  for (const c of grid.children) {
+    const a = before.get(c), b = c.getBoundingClientRect();
+    const dx = a.left - b.left, dy = a.top - b.top;
+    if (!dx && !dy) continue;
+    const up = c === lift;
+    c.getAnimations().forEach((an) => an.cancel());
+    if (up) c.style.zIndex = 5;
+    const anim = c.animate(
+      up
+        ? [{transform: `translate(${dx}px, ${dy}px) scale(1)`}, {transform: `translate(${dx / 2}px, ${dy / 2}px) scale(1.06)`, offset: .5}, {transform: 'none'}]
+        : [{transform: `translate(${dx}px, ${dy}px)`}, {transform: 'none'}],
+      {duration: up ? 340 : 260, easing: 'cubic-bezier(.2,.8,.2,1)'});
+    if (up) anim.onfinish = anim.oncancel = () => { c.style.zIndex = ''; };
+  }
+}
+
+// Keeps the first card's "earlier" and the last card's "later" button disabled.
+function updateArrows() {
+  const cards = [...$('pages').children];
+  cards.forEach((c, i) => {
+    c.querySelector('[data-move="-1"]').disabled = i === 0;
+    c.querySelector('[data-move="1"]').disabled = i === cards.length - 1;
+  });
+}
+
+// The arrow buttons: the page glides to its new place at once, the backend catches up.
+async function moveCard(id, delta) {
+  const grid = $('pages');
+  const card = grid.querySelector(`.page[data-id="${id}"]`);
+  const other = delta < 0 ? card?.previousElementSibling : card?.nextElementSibling;
+  if (!card || !other) return;
+  flip(() => grid.insertBefore(card, delta < 0 ? other : other.nextElementSibling), card);
+  renumber();
+  updateArrows();
+  try { pages = await MovePage(id, delta); } catch { pages = await Pages(); renderPages(); }
+}
+
 // Moves the placeholder to where the pointer says, animating the pages that make room (FLIP).
 function placeAt(x, y) {
   const grid = $('pages');
@@ -399,20 +442,7 @@ function placeAt(x, y) {
   const ref = after ? best.nextElementSibling : best;
   if (ref === drag.card) return;
   if (drag.card.nextElementSibling === ref) return; // already there
-  const before = new Map([...grid.children].map((c) => [c, c.getBoundingClientRect()]));
-  grid.insertBefore(drag.card, ref);
-  for (const c of grid.children) {
-    if (c === drag.card) continue;
-    const a = before.get(c), b = c.getBoundingClientRect();
-    const dx = a.left - b.left, dy = a.top - b.top;
-    if (!dx && !dy) continue;
-    c.style.transition = 'none';
-    c.style.transform = `translate(${dx}px, ${dy}px)`;
-    requestAnimationFrame(() => {
-      c.style.transition = 'transform .18s ease';
-      c.style.transform = '';
-    });
-  }
+  flip(() => grid.insertBefore(drag.card, ref));
   renumber();
 }
 

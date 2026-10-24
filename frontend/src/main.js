@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  Version, Devices, Search, AddDevice, RemoveDevice, Choices, Scan, CancelScan, Pages, DeletePage, MovePage,
+  Devices, Search, AddDevice, RemoveDevice, Choices, Scan, CancelScan, Pages, DeletePage, MovePage,
   ClearPages, ExportPDF, LoadPrefs, SavePrefs, Status,
 } from '../wailsjs/go/main/App';
 import {EventsOn} from '../wailsjs/runtime/runtime';
@@ -254,7 +254,6 @@ EventsOn('pages', (list) => { pages = list || []; renderPages(); });
 EventsOn('scan', (ev) => { scan = ev; renderControls(); renderPages(); });
 
 (async () => {
-  $('ver').textContent = `mcprint v${await Version()}`;
   try { prefs = {last: '', devices: {}, ...JSON.parse(await LoadPrefs())}; } catch {}
   pages = (await Pages()) || [];
   renderPages();

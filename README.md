@@ -104,7 +104,8 @@ scanned or saved:
 mcprint --mock        # the macOS binary is mcprint.app/Contents/MacOS/mcprint; --demo works too
 ```
 
-The pages are drawn by `scripts/make-mock.mjs` (committed in `mock/pages`).
+The pages are drawn by `scripts/make-mock.mjs` (committed in `mock/pages`). `--theme dark` (or `light`) forces the look instead of the
+system's, and the screenshots in `docs/screenshots` were taken this way, at a window size of 1280 × 832.
 
 **Versioning.** The version lives in one place, `wails.json` (`info.productVersion`). It feeds the macOS Info.plist, the Windows file
 properties, the window title and the About window. A release is cut by pushing a `v*` tag that matches it; CI checks that, builds the

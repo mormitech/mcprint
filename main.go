@@ -39,13 +39,14 @@ func version() string {
 
 // windowFlags reads --info <scanner id> (show the details window of that scanner) and --about (show the About window)
 // instead of the app. The app starts itself this way, because Wails v2 has one window per process.
-func windowFlags(args []string) (info string, about, mock bool) {
+func windowFlags(args []string) (info string, about, mock bool, theme string) {
 	fs := flag.NewFlagSet("mcprint", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&info, "info", "", "show the details window of this scanner")
 	fs.BoolVar(&about, "about", false, "show the About window")
 	fs.BoolVar(&mock, "mock", false, "demo mode: made-up scanners and pages, for screenshots")
 	fs.BoolVar(&mock, "demo", false, "same as --mock")
+	fs.StringVar(&theme, "theme", "", "light or dark, instead of the system's setting (for screenshots)")
 	fs.Parse(args) // other arguments, such as the ones macOS adds when it launches an app, are ignored
 	return
 }
@@ -53,7 +54,7 @@ func windowFlags(args []string) (info string, about, mock bool) {
 func main() {
 	app := NewApp()
 	title, width, height := "mcPrint v"+version(), 1440, 800
-	info, about, mock := windowFlags(os.Args[1:])
+	info, about, mock, theme := windowFlags(os.Args[1:])
 	switch {
 	case about:
 		app.mode, title, width, height = "about", "About mcPrint", 440, 520
@@ -72,6 +73,8 @@ func main() {
 		}
 	}
 
+	app.theme = theme
+
 	var appMenuBar *menu.Menu
 	if app.mode == "" { // the small windows have no menu of their own
 		appMenuBar = appMenu(app)
@@ -89,8 +92,8 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		// Without Mac options Wails leaves the green zoom (maximise) button disabled.
-		Mac:        &mac.Options{}, // without Mac options the zoom button is disabled; the window follows the system's appearance
-		Windows:    &windows.Options{Theme: windows.SystemDefault},
+		Mac:        &mac.Options{Appearance: macAppearance(theme)}, // without Mac options the zoom button is disabled
+		Windows:    &windows.Options{Theme: windowsTheme(theme)},
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,
 		Bind: []interface{}{
@@ -101,4 +104,25 @@ func main() {
 	if err != nil {
 		println("Error:", err.Error())
 	}
+}
+
+// The window follows the system's light or dark appearance, unless --theme says otherwise (used for screenshots).
+func macAppearance(theme string) mac.AppearanceType {
+	switch theme {
+	case "dark":
+		return mac.NSAppearanceNameDarkAqua
+	case "light":
+		return mac.NSAppearanceNameAqua
+	}
+	return mac.DefaultAppearance
+}
+
+func windowsTheme(theme string) windows.Theme {
+	switch theme {
+	case "dark":
+		return windows.Dark
+	case "light":
+		return windows.Light
+	}
+	return windows.SystemDefault
 }

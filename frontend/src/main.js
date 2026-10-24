@@ -328,6 +328,12 @@ function inputRows(name, i) {
     Largest page: ${i.maxWidth ? `${mm(i.maxWidth)} × ${mm(i.maxHeight)} mm` : '–'}</td></tr>`;
 }
 
+// Most scanners already put their maker in the model name ("Brother MFC-L2710DN series"): do not say it twice.
+function makeAndModel(c) {
+  const make = (c.make || '').trim(), model = (c.model || '').trim();
+  return model.toLowerCase().startsWith(make.toLowerCase()) ? model : `${make} ${model}`.trim();
+}
+
 function renderDetails(d, caps, status, err) {
   const base = `${d.scheme}://${d.host.includes(':') ? `[${d.host}]` : d.host}:${d.port}${d.root ? '/' + d.root : ''}`;
   const alive = status ? 'online' : 'not reachable right now';
@@ -346,7 +352,7 @@ function renderDetails(d, caps, status, err) {
       </table>
       <h4>Reported by the scanner</h4>
       ${err ? `<p class="muted">${esc(err)}</p>` : !caps ? '<p class="muted">Reading…</p>' : `<table>
-        <tr><th>Make and model</th><td>${esc([caps.make, caps.model].filter(Boolean).join(' ')) || '–'}</td></tr>
+        <tr><th>Make and model</th><td>${esc(makeAndModel(caps)) || '–'}</td></tr>
         <tr><th>eSCL version</th><td>${esc(caps.version) || '–'}</td></tr>
         <tr><th>UUID</th><td>${esc(caps.uuid) || '–'}</td></tr>
         ${status ? `<tr><th>Status</th><td>${esc(status.state)}${status.adfState ? `, feeder: ${esc(status.adfState.replace('ScannerAdf', '').toLowerCase())}` : ''}</td></tr>` : ''}

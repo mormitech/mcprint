@@ -69,6 +69,7 @@ type App struct {
 	pages    []*Page
 	nextID   int
 	cancel   context.CancelFunc // set while a scan runs
+	theme    string             // --theme: light or dark instead of the system's setting
 	mock     *mockState         // set in demo mode (--mock)
 	mode     string             // "" for the app, "info" for a scanner's details window, "about" for the About window
 	infoGUID string             // the scanner of the details window
@@ -477,6 +478,9 @@ func (a *App) openWindow(key string, args ...string) error {
 	}
 	if a.mock != nil {
 		args = append([]string{"--mock"}, args...)
+	}
+	if a.theme != "" {
+		args = append([]string{"--theme", a.theme}, args...)
 	}
 	cmd := exec.Command(exe, args...)
 	if err := cmd.Start(); err != nil {

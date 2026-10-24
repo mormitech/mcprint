@@ -90,11 +90,21 @@ On Linux also `libgtk-3-dev libwebkit2gtk-4.1-dev`, and build with `-tags webkit
 | `internal/pdf` | PDF writer (JPEGs embedded as they are) |
 | `frontend/` | the UI (vanilla JS, built with Vite) |
 | `packaging/windows` | the Inno Setup installer script |
+| `mock.go`, `mock/` | demo mode: made-up scanners and pages (`scripts/make-mock.mjs` draws the pages) |
 | `scripts/` | generators for the Homebrew cask and formula (`make-cask.mjs`, `make-formula.mjs`) |
 | `.github/workflows/build.yml` | builds, tests and packages on macOS, Windows and Linux; publishes the release on a tag |
 
 The window has one process per window (Wails v2): the About window and a scanner's details window are the same program started
 with `--about` or `--info <scanner id>`.
+
+**Demo mode** shows made-up scanners and already scanned pages instead of yours, handy for screenshots. Nothing real is searched,
+scanned or saved:
+
+```
+mcprint --mock        # the macOS binary is mcprint.app/Contents/MacOS/mcprint; --demo works too
+```
+
+The pages are drawn by `scripts/make-mock.mjs` (committed in `mock/pages`).
 
 **Versioning.** The version lives in one place, `wails.json` (`info.productVersion`). It feeds the macOS Info.plist, the Windows file
 properties, the window title and the About window. A release is cut by pushing a `v*` tag that matches it; CI checks that, builds the

@@ -144,6 +144,18 @@ func NewRegistry(path string, onChange func()) *Registry {
 	return r
 }
 
+// NewMockRegistry is a registry with made-up devices that is never searched, saved or changed by the network (demo mode).
+func NewMockRegistry(devices []Device) *Registry {
+	r := &Registry{kick: make(chan struct{}, 1), devs: map[string]*entry{}}
+	for _, d := range devices {
+		r.devs[d.GUID] = &entry{Device: d}
+	}
+	return r
+}
+
+// SetOnChange sets the function that is called when the list changes.
+func (r *Registry) SetOnChange(f func()) { r.onChange = f }
+
 // List returns the devices, online ones first.
 func (r *Registry) List() []Device {
 	r.mu.Lock()

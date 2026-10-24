@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 
@@ -38,11 +39,13 @@ func version() string {
 
 // windowFlags reads --info <scanner id> (show the details window of that scanner) and --about (show the About window)
 // instead of the app. The app starts itself this way, because Wails v2 has one window per process.
-func windowFlags(args []string) (info string, about bool) {
+func windowFlags(args []string) (info string, about, mock bool) {
 	fs := flag.NewFlagSet("mcprint", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&info, "info", "", "show the details window of this scanner")
 	fs.BoolVar(&about, "about", false, "show the About window")
+	fs.BoolVar(&mock, "mock", false, "demo mode: made-up scanners and pages, for screenshots")
+	fs.BoolVar(&mock, "demo", false, "same as --mock")
 	fs.Parse(args) // other arguments, such as the ones macOS adds when it launches an app, are ignored
 	return
 }
@@ -50,14 +53,23 @@ func windowFlags(args []string) (info string, about bool) {
 func main() {
 	app := NewApp()
 	title, width, height := "mcPrint v"+version(), 1440, 800
-	info, about := windowFlags(os.Args[1:])
+	info, about, mock := windowFlags(os.Args[1:])
 	switch {
 	case about:
 		app.mode, title, width, height = "about", "About mcPrint", 440, 520
 	case info != "":
 		app.mode, app.infoGUID, title, width, height = "info", info, "Scanner details", 600, 720
 	default:
-		app.loadSession()
+		if !mock { // demo mode must not read the real session
+			app.loadSession()
+		}
+	}
+
+	if mock {
+		if err := app.enableMock(); err != nil {
+			fmt.Fprintln(os.Stderr, "mcprint:", err)
+			os.Exit(2)
+		}
 	}
 
 	var appMenuBar *menu.Menu

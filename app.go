@@ -69,6 +69,7 @@ type App struct {
 	pages    []*Page
 	nextID   int
 	cancel   context.CancelFunc // set while a scan runs
+	mock     *mockState         // set in demo mode (--mock)
 	mode     string             // "" for the app, "info" for a scanner's details window, "about" for the About window
 	infoGUID string             // the scanner of the details window
 	infoWins map[string]*exec.Cmd
@@ -89,6 +90,16 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	if a.mock != nil { // demo mode: the made-up scanners, no searching
+		a.registry = a.mock.registry
+		a.registry.SetOnChange(func() { wruntime.EventsEmit(a.ctx, "devices", a.registry.List()) })
+		if a.mode == "info" {
+			if d, ok := a.registry.Get(a.infoGUID); ok {
+				wruntime.WindowSetTitle(ctx, d.Name+" – details")
+			}
+		}
+		return
+	}
 	if a.mode != "" { // a small window of its own: no searching and no session
 		if a.mode == "info" { // read the saved device list
 			a.registry = escl.NewRegistry(filepath.Join(a.cacheDir, "devices.json"), nil)
@@ -118,6 +129,9 @@ func (a *App) Search() { a.registry.Search() }
 
 // AddDevice adds a scanner by address, for networks where mDNS does not get through.
 func (a *App) AddDevice(address string) (escl.Device, error) {
+	if a.mock != nil {
+		return escl.Device{}, errors.New("demo mode: scanners cannot be added")
+	}
 	return a.registry.Add(a.ctx, address)
 }
 
@@ -144,6 +158,12 @@ func (a *App) capabilities(ctx context.Context, guid string) (*escl.Caps, error)
 	a.mu.Unlock()
 	if ok && time.Since(e.at) < 5*time.Minute {
 		return e.caps, nil
+	}
+	if a.mock != nil {
+		if d, known := a.registry.Get(guid); known && d.Online {
+			return a.mock.caps[guid], nil
+		}
+		return nil, errors.New("could not reach the scanner: is it switched on and on the same network?")
 	}
 	c, err := a.client(guid)
 	if err != nil {
@@ -176,6 +196,12 @@ func (a *App) Choices(guid, source string, duplex bool) (escl.Choices, error) {
 
 // Status is the live state of the scanner (idle, processing, feeder loaded or empty).
 func (a *App) Status(guid string) (escl.Status, error) {
+	if a.mock != nil {
+		if d, ok := a.registry.Get(guid); ok && d.Online {
+			return escl.Status{State: "Idle", AdfState: "ScannerAdfLoaded"}, nil
+		}
+		return escl.Status{}, errors.New("the scanner is not reachable")
+	}
 	c, err := a.client(guid)
 	if err != nil {
 		return escl.Status{}, err
@@ -203,9 +229,11 @@ func (a *App) Scan(req ScanRequest) error {
 	if err != nil {
 		return err
 	}
-	c, err := a.client(req.GUID)
-	if err != nil {
-		return err
+	var c *escl.Client
+	if a.mock == nil {
+		if c, err = a.client(req.GUID); err != nil {
+			return err
+		}
 	}
 
 	a.mu.Lock()
@@ -220,22 +248,19 @@ func (a *App) Scan(req ScanRequest) error {
 	go func() {
 		count := 0
 		a.emitScan(ScanEvent{State: "scanning", Message: "Scanning…"})
-		_, err := c.Scan(ctx, resolved, func(data []byte) {
-			cfg, derr := jpeg.DecodeConfig(bytes.NewReader(data))
-			if derr != nil {
-				return // not an image, ignore
+		onPage := func(data []byte) {
+			if a.addPage(data, resolved.DPI) {
+				count++
+				a.emitPages()
+				a.emitScan(ScanEvent{State: "scanning", Message: fmt.Sprintf("Scanning… %d page(s)", count), Count: count})
 			}
-			a.mu.Lock()
-			p := &Page{ID: a.nextID, Data: data, Width: cfg.Width, Height: cfg.Height, DPI: resolved.DPI}
-			a.nextID++
-			a.pages = append(a.pages, p)
-			a.writePageFile(p)
-			a.saveSession()
-			a.mu.Unlock()
-			count++
-			a.emitPages()
-			a.emitScan(ScanEvent{State: "scanning", Message: fmt.Sprintf("Scanning… %d page(s)", count), Count: count})
-		})
+		}
+		var err error
+		if a.mock != nil {
+			_, err = a.mock.scan(ctx, resolved, onPage)
+		} else {
+			_, err = c.Scan(ctx, resolved, onPage)
+		}
 		a.mu.Lock()
 		a.scanning, a.cancel = false, nil
 		a.mu.Unlock()
@@ -251,6 +276,22 @@ func (a *App) Scan(req ScanRequest) error {
 		}
 	}()
 	return nil
+}
+
+// addPage keeps a scanned page (and saves it in the session). It reports false for data that is not an image.
+func (a *App) addPage(data []byte, dpi int) bool {
+	cfg, err := jpeg.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	p := &Page{ID: a.nextID, Data: data, Width: cfg.Width, Height: cfg.Height, DPI: dpi}
+	a.nextID++
+	a.pages = append(a.pages, p)
+	a.writePageFile(p)
+	a.saveSession()
+	return true
 }
 
 // CancelScan stops the running scan and deletes its job on the scanner.
@@ -434,6 +475,9 @@ func (a *App) openWindow(key string, args ...string) error {
 	if c := a.infoWins[key]; c != nil && c.ProcessState == nil {
 		return nil
 	}
+	if a.mock != nil {
+		args = append([]string{"--mock"}, args...)
+	}
 	cmd := exec.Command(exe, args...)
 	if err := cmd.Start(); err != nil {
 		return err
@@ -458,6 +502,9 @@ func (a *App) showAbout() { a.openWindow("about", "--about") }
 func (a *App) shutdown(ctx context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.mock != nil {
+		os.RemoveAll(a.cacheDir) // the demo's temporary folder
+	}
 	for _, c := range a.infoWins {
 		if c.Process != nil {
 			c.Process.Kill()

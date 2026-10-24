@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  Devices, Search, AddDevice, RemoveDevice, Choices, Scan, CancelScan, Pages, DeletePage, MovePage,
+  Devices, Capabilities, Search, AddDevice, RemoveDevice, Choices, Scan, CancelScan, Pages, DeletePage, MovePage,
   ClearPages, ExportPDF, LoadPrefs, SavePrefs, Status,
 } from '../wailsjs/go/main/App';
 import {EventsOn} from '../wailsjs/runtime/runtime';
@@ -128,7 +128,7 @@ function renderControls() {
   }
   const hint = !d.online && !busy ? '<div class="state error">This scanner is offline right now.</div>' : '';
   const st = scan.message ? `<div class="state ${scan.state}">${esc(scan.message)}</div>` : '';
-  el.innerHTML = `<div class="row"><strong>${esc(d.name)}</strong><span class="muted">${esc(d.host)}</span></div><div style="height:10px"></div>${form}${hint}${st}`;
+  el.innerHTML = `<div class="row"><strong>${esc(d.name)}</strong><button id="info-btn" class="icon tip tip-left" data-tip="Scanner details" aria-label="Scanner details">i</button></div><div style="height:10px"></div>${form}${hint}${st}`;
 }
 
 $('controls').addEventListener('change', async (ev) => {
@@ -259,3 +259,62 @@ EventsOn('scan', (ev) => { scan = ev; renderControls(); renderPages(); });
   renderControls();
   await setDevices(await Devices());
 })();
+
+// ---- Scanner details -------------------------------------------------------------------------------------
+
+const mm = (v) => Math.round(v / 300 * 25.4);
+const list = (a) => (a && a.length ? a.map(esc).join(', ') : '–');
+const dpiText = (r) => (r.values?.length ? r.values.join(', ') : r.max ? `${r.min}–${r.max} (step ${r.step})` : '–');
+
+function inputRows(name, i) {
+  if (!i) return `<tr><th>${name}</th><td>not available</td></tr>`;
+  return `<tr><th>${name}</th><td>
+    Colour: ${list(i.colorModes.map((c) => ({RGB24: 'colour', Grayscale8: 'grey', BlackAndWhite1: 'black & white'}[c] || c)))}<br>
+    Resolution: ${esc(dpiText(i.resolutions))} dpi<br>
+    Formats: ${list(i.formats)}<br>
+    Largest page: ${i.maxWidth ? `${mm(i.maxWidth)} × ${mm(i.maxHeight)} mm` : '–'}</td></tr>`;
+}
+
+async function showInfo() {
+  const d = devices.find((x) => x.guid === selected);
+  if (!d) return;
+  const dlg = $('info');
+  const base = `${d.scheme}://${d.host.includes(':') ? `[${d.host}]` : d.host}:${d.port}${d.root ? '/' + d.root : ''}`;
+  const draw = (caps, status, err) => {
+    dlg.innerHTML = `<div class="row"><h3>${esc(d.name)}</h3><button id="info-close" class="icon" aria-label="Close">✕</button></div>
+      <h4>Found on the network</h4>
+      <table>
+        <tr><th>IP address</th><td>${esc(d.host)}</td></tr>
+        <tr><th>Port</th><td>${d.port}</td></tr>
+        <tr><th>Protocol</th><td>${esc(d.scheme)}${d.scheme === 'https' ? ' (certificate not verified)' : ''}</td></tr>
+        <tr><th>eSCL path</th><td>/${esc(d.root)}</td></tr>
+        <tr><th>Address</th><td>${esc(base)}</td></tr>
+        <tr><th>Model (mDNS)</th><td>${esc(d.model) || '–'}</td></tr>
+        <tr><th>Scanner ID</th><td>${esc(d.guid)}</td></tr>
+        <tr><th>Found by</th><td>${d.manual ? 'added by address' : 'mDNS (Bonjour)'}</td></tr>
+        <tr><th>State</th><td>${d.online ? 'online' : 'offline'}, last seen ${esc(new Date(d.lastSeen).toLocaleString())}</td></tr>
+      </table>
+      <h4>Reported by the scanner</h4>
+      ${err ? `<p class="muted">${esc(err)}</p>` : !caps ? '<p class="muted">Reading…</p>' : `<table>
+        <tr><th>Make and model</th><td>${esc([caps.make, caps.model].filter(Boolean).join(' ')) || '–'}</td></tr>
+        <tr><th>eSCL version</th><td>${esc(caps.version) || '–'}</td></tr>
+        <tr><th>UUID</th><td>${esc(caps.uuid) || '–'}</td></tr>
+        ${status ? `<tr><th>Status</th><td>${esc(status.state)}${status.adfState ? `, feeder: ${esc(status.adfState.replace('ScannerAdf', '').toLowerCase())}` : ''}</td></tr>` : ''}
+        ${caps.feederCapacity ? `<tr><th>Feeder capacity</th><td>${caps.feederCapacity} sheets</td></tr>` : ''}
+        ${inputRows('Flatbed', caps.platen)}${inputRows('Feeder, one side', caps.simplex)}${inputRows('Feeder, both sides', caps.duplex)}
+      </table>`}`;
+  };
+  draw();
+  if (!dlg.open) dlg.showModal();
+  try {
+    const [caps, status] = await Promise.all([Capabilities(d.guid), Status(d.guid).catch(() => null)]);
+    draw(caps, status);
+  } catch (e) {
+    draw(null, null, String(e));
+  }
+}
+
+$('controls').addEventListener('click', (ev) => { if (ev.target.closest('#info-btn')) showInfo(); });
+$('info').addEventListener('click', (ev) => {
+  if (ev.target === $('info') || ev.target.closest('#info-close')) $('info').close(); // the backdrop counts as the dialog
+});

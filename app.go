@@ -69,7 +69,8 @@ type App struct {
 	pages    []*Page
 	nextID   int
 	cancel   context.CancelFunc // set while a scan runs
-	infoGUID string             // set in the details window: the scanner it shows
+	mode     string             // "" for the app, "info" for a scanner's details window, "about" for the About window
+	infoGUID string             // the scanner of the details window
 	infoWins map[string]*exec.Cmd
 	scanning bool
 }
@@ -88,10 +89,12 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	if a.infoGUID != "" { // details window: read the saved device list, no searching and no session
-		a.registry = escl.NewRegistry(filepath.Join(a.cacheDir, "devices.json"), nil)
-		if d, ok := a.registry.Get(a.infoGUID); ok {
-			wruntime.WindowSetTitle(ctx, d.Name+" – details")
+	if a.mode != "" { // a small window of its own: no searching and no session
+		if a.mode == "info" { // read the saved device list
+			a.registry = escl.NewRegistry(filepath.Join(a.cacheDir, "devices.json"), nil)
+			if d, ok := a.registry.Get(a.infoGUID); ok {
+				wruntime.WindowSetTitle(ctx, d.Name+" – details")
+			}
 		}
 		return
 	}
@@ -405,12 +408,17 @@ func (a *App) SavePrefs(js string) error {
 
 // ---- Details window -----------------------------------------------------------------------------------------
 
-// Mode tells the UI what to show: the app, or the details of one scanner (the guid, in the details window).
-func (a *App) Mode() string { return a.infoGUID }
+// Mode tells the UI what to show: "" for the app, "about", or "info:<scanner id>" for the details of a scanner.
+func (a *App) Mode() string {
+	if a.mode == "info" {
+		return "info:" + a.infoGUID
+	}
+	return a.mode
+}
 
-// ShowInfo opens the details of a scanner in a window of its own: a second copy of this program, started with
-// --info. A scanner that already has its window open is not opened twice.
-func (a *App) ShowInfo(guid string) error {
+// openWindow opens a window of its own: a second copy of this program, started with the given arguments, because
+// Wails v2 has one window per process. A window that is already open (same key) is not opened twice.
+func (a *App) openWindow(key string, args ...string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -420,22 +428,28 @@ func (a *App) ShowInfo(guid string) error {
 	if a.infoWins == nil {
 		a.infoWins = map[string]*exec.Cmd{}
 	}
-	if c := a.infoWins[guid]; c != nil && c.ProcessState == nil {
+	if c := a.infoWins[key]; c != nil && c.ProcessState == nil {
 		return nil
 	}
-	cmd := exec.Command(exe, "--info", guid)
+	cmd := exec.Command(exe, args...)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	a.infoWins[guid] = cmd
+	a.infoWins[key] = cmd
 	go func() {
 		cmd.Wait()
 		a.mu.Lock()
-		delete(a.infoWins, guid)
+		delete(a.infoWins, key)
 		a.mu.Unlock()
 	}()
 	return nil
 }
+
+// ShowInfo opens the details of a scanner in a window of its own.
+func (a *App) ShowInfo(guid string) error { return a.openWindow("info:"+guid, "--info", guid) }
+
+// showAbout opens the About window.
+func (a *App) showAbout() { a.openWindow("about", "--about") }
 
 // shutdown closes the details windows together with the app.
 func (a *App) shutdown(ctx context.Context) {

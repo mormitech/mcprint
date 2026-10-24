@@ -36,44 +36,48 @@ func version() string {
 	return p.Info.ProductVersion
 }
 
-// infoFlag reads --info <scanner id>: show the details window of that scanner instead of the app. The app starts
-// itself this way when the info button is clicked, because Wails v2 has one window per process.
-func infoFlag(args []string) string {
-	var guid string
+// windowFlags reads --info <scanner id> (show the details window of that scanner) and --about (show the About window)
+// instead of the app. The app starts itself this way, because Wails v2 has one window per process.
+func windowFlags(args []string) (info string, about bool) {
 	fs := flag.NewFlagSet("mcprint", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.StringVar(&guid, "info", "", "show the details window of this scanner")
+	fs.StringVar(&info, "info", "", "show the details window of this scanner")
+	fs.BoolVar(&about, "about", false, "show the About window")
 	fs.Parse(args) // other arguments, such as the ones macOS adds when it launches an app, are ignored
-	return guid
+	return
 }
 
 func main() {
 	app := NewApp()
 	title, width, height := "mcprint v"+version(), 1440, 800
-	if guid := infoFlag(os.Args[1:]); guid != "" {
-		app.infoGUID = guid
-		title, width, height = "Scanner details", 600, 720
-	} else {
+	info, about := windowFlags(os.Args[1:])
+	switch {
+	case about:
+		app.mode, title, width, height = "about", "About mcprint", 440, 520
+	case info != "":
+		app.mode, app.infoGUID, title, width, height = "info", info, "Scanner details", 600, 720
+	default:
 		app.loadSession()
 	}
 
 	var appMenuBar *menu.Menu
-	if app.infoGUID == "" { // the details window has no menu of its own
+	if app.mode == "" { // the small windows have no menu of their own
 		appMenuBar = appMenu(app)
 	}
 
 	err := wails.Run(&options.App{
-		Menu:   appMenuBar,
-		Title:  title,
-		Width:  width,
-		Height: height,
+		Menu:          appMenuBar,
+		Title:         title,
+		Width:         width,
+		Height:        height,
+		DisableResize: about,
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
 			Handler: app.pageHandler(),
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		// Without Mac options Wails leaves the green zoom (maximise) button disabled.
-		Mac:        &mac.Options{About: macAbout()}, // also makes the zoom button work; the window follows the system's appearance
+		Mac:        &mac.Options{}, // without Mac options the zoom button is disabled; the window follows the system's appearance
 		Windows:    &windows.Options{Theme: windows.SystemDefault},
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,

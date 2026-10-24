@@ -1,9 +1,10 @@
 import './style.css';
 import {
-  Devices, Capabilities, Mode, ShowInfo, Search, AddDevice, RemoveDevice, Choices, Scan, CancelScan, Pages, DeletePage, MovePage,
+  Version, Devices, Capabilities, Mode, ShowInfo, Search, AddDevice, RemoveDevice, Choices, Scan, CancelScan, Pages, DeletePage, MovePage,
   ClearPages, MovePageTo, ExportPDF, LoadPrefs, SavePrefs, Status,
 } from '../wailsjs/go/main/App';
-import {EventsOn} from '../wailsjs/runtime/runtime';
+import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
+import appIcon from './appicon.png';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
@@ -280,8 +281,9 @@ EventsOn('pages', (list) => { pages = list || []; renderPages(); });
 EventsOn('scan', (ev) => { scan = ev; renderControls(); renderPages(); });
 
 (async () => {
-  const infoGuid = await Mode();
-  if (infoGuid) { showDetailsWindow(infoGuid); return; }
+  const mode = await Mode();
+  if (mode === 'about') { showAbout(); return; }
+  if (mode.startsWith('info:')) { showDetailsWindow(mode.slice(5)); return; }
   try { prefs = {last: '', devices: {}, ...JSON.parse(await LoadPrefs())}; } catch {}
   pages = (await Pages()) || [];
   renderPages();
@@ -494,3 +496,24 @@ window.addEventListener('pointerup', async () => {
 
 window.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cancelDrag(); });
 window.addEventListener('blur', () => cancelDrag());
+
+// ---- About window ----------------------------------------------------------------------------------------
+// The program started with --about shows this. Links open in the system's browser.
+
+const REPO = 'https://github.com/mormitech/mcprint';
+
+async function showAbout() {
+  document.body.classList.add('about-mode');
+  $('about').hidden = false;
+  $('about').innerHTML = `<img src="${appIcon}" alt="" width="96" height="96">
+    <h1>mcprint</h1>
+    <p class="muted">Version ${esc(await Version())}</p>
+    <p>Scan pages of documents from network scanners (eSCL / AirScan) on macOS, Windows and Linux.</p>
+    <p class="muted">Free and open source, MIT license. No accounts, no ads, no telemetry.</p>
+    <p class="links"><a href="${REPO}">Website and source code</a><a href="${REPO}/issues">Report a problem</a><a href="${REPO}/blob/main/LICENSE">License</a></p>`;
+}
+
+document.addEventListener('click', (ev) => {
+  const a = ev.target.closest('a[href^="http"]');
+  if (a) { ev.preventDefault(); BrowserOpenURL(a.href); }
+});

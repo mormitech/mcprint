@@ -62,7 +62,7 @@ brew install mormitech/tap/mcprint   # macOS (Apple silicon) and Linux (x64)
 | | macOS | Windows | Linux |
 |---|---|---|---|
 | Builds and tests in CI | ✅ | ✅ (installer installed, started and uninstalled on a runner) | ✅ |
-| Used and tried by hand | ✅ (Apple silicon, one Brother scanner) | ⏳ not yet | ⏳ not yet |
+| Used and tried by hand | ✅ (Apple silicon, one Brother scanner) | ✅ (installer) | ⏳ not yet |
 
 Releases are not code-signed. Found a scanner that does not work? [Open an issue](https://github.com/mormitech/mcprint/issues) and say which model it is.
 

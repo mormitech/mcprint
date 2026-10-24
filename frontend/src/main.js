@@ -369,8 +369,16 @@ function cancelDrag(restore = true) {
   drag = null;
 }
 
+// Numbers the pages as they stand now; the page in the air gets the number it would have if dropped here.
 function renumber() {
-  [...$('pages').children].forEach((c, i) => { const n = c.querySelector('.n'); if (n) n.textContent = i + 1; });
+  [...$('pages').children].forEach((c, i) => {
+    const n = c.querySelector('.n');
+    if (n) n.textContent = i + 1;
+    if (c === drag?.card) {
+      const g = drag.ghost?.querySelector('.n');
+      if (g) g.textContent = i + 1;
+    }
+  });
 }
 
 // Moves the placeholder to where the pointer says, animating the pages that make room (FLIP).
@@ -426,6 +434,7 @@ window.addEventListener('pointermove', (ev) => {
     drag.ghost.classList.add('ghost');
     drag.ghost.style.width = `${r.width}px`;
     document.body.appendChild(drag.ghost);
+    drag.ghost.querySelector('.n')?.classList.add('flying');
     drag.card.classList.add('placeholder');
     document.body.classList.add('dragging');
     // scroll the page area while the pointer is near its top or bottom edge

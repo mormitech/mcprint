@@ -76,3 +76,4 @@ body.dragging, body.dragging * { cursor:grabbing !important; }
 .page .tools .n { font-size:14px; } .page .tools small { color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; }
 .page .tools button.ic { width:26px; height:26px; padding:0; flex:none; display:grid; place-items:center; border-radius:6px; }
 .page .tools button.ic svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.page.ghost .n.flying { background:var(--accent); color:var(--accent-text); border-radius:10px; padding:1px 8px; }

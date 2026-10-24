@@ -4,7 +4,7 @@ import {
   ClearPages, MovePageTo, ExportPDF, LoadPrefs, SavePrefs, Status,
 } from '../wailsjs/go/main/App';
 import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
-import appIcon from './appicon.png';
+import logo from './assets/mormitech-mark.svg';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
@@ -530,7 +530,7 @@ const REPO = 'https://github.com/mormitech/mcprint';
 async function showAbout() {
   document.body.classList.add('about-mode');
   $('about').hidden = false;
-  $('about').innerHTML = `<img src="${appIcon}" alt="" width="96" height="96">
+  $('about').innerHTML = `<img class="logo" src="${logo}" alt="" width="132">
     <h1>mcprint</h1>
     <p class="muted">Version ${esc(await Version())}</p>
     <p>Scan pages of documents from network scanners (eSCL / AirScan) on macOS, Windows and Linux.</p>

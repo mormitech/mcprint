@@ -22,11 +22,16 @@ into one PDF. No driver, no vendor software, no account.
 - **Finds your scanners.** It looks for eSCL (AirScan) scanners with mDNS (Bonjour) and remembers them, so they are there the moment
   you start the app. A scanner that does not answer mDNS (some networks block it) can be added by its address.
 - **Only what your scanner can do.** Source (flatbed or feeder), both sides, colour, resolution and paper size are offered as toggles,
-  from what the scanner reports; your choices are remembered per scanner. The **i** button shows everything the scanner told us.
-- **Pages show up as they are scanned.** Feed a stack and watch the pages arrive; **Cancel** stops the job on the scanner. When something
+  from what the scanner reports; your choices are remembered per scanner. The **i** button shows everything the scanner told us, including
+  the jobs it keeps in its queue, with a **Clear queue** button for a job that got stuck. Black & white also works on scanners that only
+  deliver it as grey: the page is made black and white here.
+- **Pages show up as they are scanned.** Feed a stack and watch the pages arrive (the scan button waits until it is done). When something
   goes wrong (feeder empty, scanner off), there is a **Reconnect** or **Try again** button.
-- **Page view.** Click a page to see it large: scroll to zoom, drag to move, double-click to fit or zoom in, arrow keys to flip pages.
+- **Page view.** Click a page to see it large: scroll to zoom, drag to move, double-click to fit or zoom in, arrow keys to flip pages,
+  **R** to turn the page for viewing (the page itself is not changed).
 - **Rearrange.** Drag a page to a new place and see where it will land, or use the arrows; delete pages you do not want.
+- **Insert anywhere.** Click the **+** between two pages (or before the first, after the last) and the next scan lands there, shown as a
+  dashed page ([screenshot](docs/screenshots/08-insert-marker.png)).
 - **Save as PDF.** One PDF with all pages, in the order shown. The scanned JPEGs are embedded as they came from the scanner.
 - **Picks up where you left off.** The pages of the last session are restored when you reopen the app.
 - **Follows your system.** Light or dark mode, and the About window in the place each system puts it.

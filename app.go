@@ -301,6 +301,27 @@ func (a *App) MovePage(id, delta int) []PageView {
 	return a.Pages()
 }
 
+// MovePageTo moves a page to a position (0 is the first page), as dropped by the user.
+func (a *App) MovePageTo(id, index int) []PageView {
+	a.mu.Lock()
+	from := -1
+	for i, p := range a.pages {
+		if p.ID == id {
+			from = i
+			break
+		}
+	}
+	if from >= 0 {
+		index = max(0, min(index, len(a.pages)-1))
+		p := a.pages[from]
+		rest := append(append([]*Page{}, a.pages[:from]...), a.pages[from+1:]...)
+		a.pages = append(rest[:index], append([]*Page{p}, rest[index:]...)...)
+		a.saveSession()
+	}
+	a.mu.Unlock()
+	return a.Pages()
+}
+
 // ClearPages drops all pages.
 func (a *App) ClearPages() []PageView {
 	a.mu.Lock()

@@ -56,3 +56,8 @@ body.detail-mode { display:block; } body.detail-mode #side, body.detail-mode mai
 #detail h3 { margin:0 0 4px; font-size:18px; } #detail h4 { margin:18px 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
 #detail table { width:100%; border-collapse:collapse; } #detail th, #detail td { text-align:left; vertical-align:top; padding:5px 0; border-top:1px solid var(--line); font-size:13px; }
 #detail th { width:140px; font-weight:400; color:var(--muted); padding-right:10px; } #detail td { word-break:break-all; user-select:text; }
+
+.page { cursor:grab; user-select:none; -webkit-user-select:none; touch-action:none; } .page img { -webkit-user-drag:none; }
+body.dragging, body.dragging * { cursor:grabbing !important; }
+.page.placeholder { border:2px dashed var(--accent); background:var(--sel); } .page.placeholder > * { opacity:.25; }
+.page.ghost { position:fixed; left:0; top:0; z-index:20; pointer-events:none; margin:0; box-shadow:0 14px 34px var(--shadow); opacity:.96; }

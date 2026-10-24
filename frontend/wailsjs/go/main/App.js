@@ -46,6 +46,10 @@ export function MovePage(arg1, arg2) {
   return window['go']['main']['App']['MovePage'](arg1, arg2);
 }
 
+export function MovePageTo(arg1, arg2) {
+  return window['go']['main']['App']['MovePageTo'](arg1, arg2);
+}
+
 export function Pages() {
   return window['go']['main']['App']['Pages']();
 }

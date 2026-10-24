@@ -29,3 +29,35 @@ func TestSessionRoundTrip(t *testing.T) {
 		t.Error("cleared session came back")
 	}
 }
+
+func TestMovePageTo(t *testing.T) {
+	a := &App{cacheDir: t.TempDir(), nextID: 1}
+	for i := 0; i < 4; i++ {
+		a.pages = append(a.pages, &Page{ID: a.nextID, Data: []byte{byte(i)}})
+		a.nextID++
+	}
+	ids := func() (out []int) {
+		for _, p := range a.Pages() {
+			out = append(out, p.ID)
+		}
+		return
+	}
+	for _, c := range []struct {
+		id, to int
+		want   [4]int
+	}{
+		{4, 0, [4]int{4, 1, 2, 3}},
+		{4, 3, [4]int{1, 2, 3, 4}},
+		{1, 2, [4]int{2, 3, 1, 4}},
+		{2, 99, [4]int{3, 1, 4, 2}},
+		{9, 0, [4]int{3, 1, 4, 2}},
+	} {
+		a.MovePageTo(c.id, c.to)
+		got := ids()
+		for i := range c.want {
+			if got[i] != c.want[i] {
+				t.Fatalf("move %d to %d: got %v, want %v", c.id, c.to, got, c.want)
+			}
+		}
+	}
+}

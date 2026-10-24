@@ -1,7 +1,7 @@
 import './style.css';
 import {
   Devices, Capabilities, Mode, ShowInfo, Search, AddDevice, RemoveDevice, Choices, Scan, CancelScan, Pages, DeletePage, MovePage,
-  ClearPages, ExportPDF, LoadPrefs, SavePrefs, Status,
+  ClearPages, MovePageTo, ExportPDF, LoadPrefs, SavePrefs, Status,
 } from '../wailsjs/go/main/App';
 import {EventsOn} from '../wailsjs/runtime/runtime';
 
@@ -162,6 +162,7 @@ $('controls').addEventListener('click', async (ev) => {
 // ---- Pages -----------------------------------------------------------------------------------------------
 
 function renderPages() {
+  cancelDrag();
   renderControls();
   const bar = $('pages-bar');
   bar.innerHTML = pages.length
@@ -171,9 +172,9 @@ function renderPages() {
     : '';
   $('pages').innerHTML = pages.map((p, i) => `
     <div class="page" data-id="${p.id}">
-      <img src="/page/${p.id}.jpg" alt="Page ${i + 1}" data-view="${p.id}" loading="lazy">
+      <img src="/page/${p.id}.jpg" alt="Page ${i + 1}" data-view="${p.id}" loading="lazy" draggable="false">
       <div class="tools">
-        <span>${i + 1} · ${p.width}×${p.height}</span>
+        <span><span class="n">${i + 1}</span> · ${p.width}×${p.height}</span>
         <button data-move="-1" ${i === 0 ? 'disabled' : ''} title="Move earlier">←</button>
         <button data-move="1" ${i === pages.length - 1 ? 'disabled' : ''} title="Move later">→</button>
         <button data-del="1" class="danger" title="Delete page">✕</button>
@@ -182,6 +183,7 @@ function renderPages() {
 }
 
 $('pages').addEventListener('click', async (ev) => {
+  if (justDragged) { justDragged = false; return; } // the click that ends a drag is not a click
   const t = ev.target;
   const id = Number(t.closest('.page')?.dataset.id);
   if (t.dataset.view) { $('viewer').innerHTML = `<img src="/page/${t.dataset.view}.jpg">`; $('viewer').hidden = false; }
@@ -323,3 +325,108 @@ $('controls').addEventListener('click', async (ev) => {
   if (!ev.target.closest('#info-btn')) return;
   try { await ShowInfo(selected); } catch (e) { scan = {state: 'error', message: String(e)}; renderControls(); }
 });
+
+// ---- Drag and drop to rearrange --------------------------------------------------------------------------
+// Pointer events instead of HTML5 drag and drop, so it behaves the same in every platform's webview. While dragging,
+// a copy of the page follows the pointer and the page itself becomes a dashed placeholder that moves through the
+// grid: that is where the page will land when it is dropped.
+
+let drag = null;            // {card, id, startX, startY, ghost, offX, offY, active, from}
+let justDragged = false;
+
+function cancelDrag(restore = true) {
+  if (!drag) return;
+  drag.ghost?.remove();
+  drag.card.classList.remove('placeholder');
+  document.body.classList.remove('dragging');
+  clearInterval(drag.scroller);
+  if (restore && drag.active) { drag = null; renderPages(); return; }
+  drag = null;
+}
+
+function renumber() {
+  [...$('pages').children].forEach((c, i) => { const n = c.querySelector('.n'); if (n) n.textContent = i + 1; });
+}
+
+// Moves the placeholder to where the pointer says, animating the pages that make room (FLIP).
+function placeAt(x, y) {
+  const grid = $('pages');
+  const others = [...grid.children].filter((c) => c !== drag.card);
+  if (!others.length) return;
+  let best = null, bestD = Infinity;
+  for (const c of others) {
+    const r = c.getBoundingClientRect();
+    const dx = Math.max(r.left - x, 0, x - r.right), dy = Math.max(r.top - y, 0, y - r.bottom);
+    const d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  const r = best.getBoundingClientRect();
+  // in the same row: left half is before, right half is after; a pointer below the row is after, above is before
+  const after = y > r.bottom ? true : y < r.top ? false : x > r.left + r.width / 2;
+  const ref = after ? best.nextElementSibling : best;
+  if (ref === drag.card) return;
+  if (drag.card.nextElementSibling === ref) return; // already there
+  const before = new Map([...grid.children].map((c) => [c, c.getBoundingClientRect()]));
+  grid.insertBefore(drag.card, ref);
+  for (const c of grid.children) {
+    if (c === drag.card) continue;
+    const a = before.get(c), b = c.getBoundingClientRect();
+    const dx = a.left - b.left, dy = a.top - b.top;
+    if (!dx && !dy) continue;
+    c.style.transition = 'none';
+    c.style.transform = `translate(${dx}px, ${dy}px)`;
+    requestAnimationFrame(() => {
+      c.style.transition = 'transform .18s ease';
+      c.style.transform = '';
+    });
+  }
+  renumber();
+}
+
+$('pages').addEventListener('pointerdown', (ev) => {
+  const card = ev.target.closest('.page');
+  if (!card || ev.button !== 0 || ev.target.closest('button') || scan.state === 'scanning') return;
+  drag = {card, id: Number(card.dataset.id), startX: ev.clientX, startY: ev.clientY, active: false};
+});
+
+window.addEventListener('pointermove', (ev) => {
+  if (!drag) return;
+  if (!drag.active) {
+    if (Math.hypot(ev.clientX - drag.startX, ev.clientY - drag.startY) < 6) return;
+    const r = drag.card.getBoundingClientRect();
+    drag.active = true;
+    drag.offX = drag.startX - r.left;
+    drag.offY = drag.startY - r.top;
+    drag.ghost = drag.card.cloneNode(true);
+    drag.ghost.classList.add('ghost');
+    drag.ghost.style.width = `${r.width}px`;
+    document.body.appendChild(drag.ghost);
+    drag.card.classList.add('placeholder');
+    document.body.classList.add('dragging');
+    // scroll the page area while the pointer is near its top or bottom edge
+    drag.scroller = setInterval(() => {
+      const m = document.querySelector('main').getBoundingClientRect();
+      const y = drag.y ?? 0;
+      const speed = y < m.top + 50 ? -14 : y > m.bottom - 50 ? 14 : 0;
+      if (speed) { document.querySelector('main').scrollBy(0, speed); placeAt(drag.x, drag.y); }
+    }, 30);
+  }
+  drag.x = ev.clientX; drag.y = ev.clientY;
+  drag.ghost.style.transform = `translate(${ev.clientX - drag.offX}px, ${ev.clientY - drag.offY}px) rotate(2deg)`;
+  placeAt(ev.clientX, ev.clientY);
+});
+
+window.addEventListener('pointerup', async () => {
+  if (!drag) return;
+  if (!drag.active) { drag = null; return; }
+  const id = drag.id;
+  const index = [...$('pages').children].indexOf(drag.card);
+  justDragged = true;
+  setTimeout(() => { justDragged = false; }, 0); // only the click straight after the drop is swallowed
+  cancelDrag(false);
+  pages = await MovePageTo(id, index);
+  renderPages();
+});
+
+window.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cancelDrag(); });
+window.addEventListener('blur', () => cancelDrag());

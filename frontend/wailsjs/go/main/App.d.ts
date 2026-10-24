@@ -25,6 +25,8 @@ export function Mode():Promise<string>;
 
 export function MovePage(arg1:number,arg2:number):Promise<Array<main.PageView>>;
 
+export function MovePageTo(arg1:number,arg2:number):Promise<Array<main.PageView>>;
+
 export function Pages():Promise<Array<main.PageView>>;
 
 export function RemoveDevice(arg1:string):Promise<void>;

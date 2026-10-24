@@ -121,8 +121,7 @@ function renderControls() {
       <label>Paper<select id="o-paper" ${busy ? 'disabled' : ''}>${choices.papers.map((p) => opt(PAPER, p, opts.paper)).join('')}</select></label>
       ${busy
         ? '<button id="cancel" class="danger">Cancel</button>'
-        : `<div class="scanbox"><button id="scan" class="primary" ${d.online ? '' : 'disabled'}>Scan</button>
-             <span class="hint">${pages.length ? `adds page ${pages.length + 1} to this document` : 'starts a new document'}</span></div>`}
+        : `<button id="scan" class="primary tip" data-tip="${pages.length ? `Adds page ${pages.length + 1} to this document` : 'Starts a new document'}" ${d.online ? '' : 'disabled'}>${pages.length ? '+ ' : ''}Scan</button>`}
     </div>`;
   } else if (!scan.message) {
     form = '<p class="empty">Reading what the scanner can do…</p>';

@@ -34,4 +34,8 @@ button.danger:hover:not(:disabled) { border-color:var(--bad); }
 #viewer { position:fixed; inset:0; background:rgba(8,14,24,.92); display:flex; align-items:center; justify-content:center; cursor:zoom-out; z-index:10; }
 #viewer[hidden] { display:none; } #viewer img { max-width:96vw; max-height:96vh; background:#fff; }
 #search .ico { display:inline-block; } #search.spin .ico { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
-.scanbox { display:grid; gap:3px; justify-items:center; } .scanbox .hint { font-size:11px; color:var(--muted); }
+.tip { position:relative; }
+.tip::after { content:attr(data-tip); position:absolute; left:50%; top:calc(100% + 8px); transform:translate(-50%,-3px); white-space:nowrap; pointer-events:none;
+  background:#0f1824; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 9px; font-size:12px; font-weight:400;
+  box-shadow:0 6px 18px rgba(0,0,0,.4); opacity:0; transition:opacity .15s .3s, transform .15s .3s; z-index:5; }
+.tip:hover::after { opacity:1; transform:translate(-50%,0); }

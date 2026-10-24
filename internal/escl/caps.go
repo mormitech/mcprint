@@ -42,6 +42,16 @@ type Caps struct {
 type Status struct {
 	State    string `json:"state"`
 	AdfState string `json:"adfState"`
+	Jobs     []Job  `json:"jobs"`
+}
+
+// Job is one entry of the scanner's job list (running, finished or cancelled; scanners keep the last ones).
+type Job struct {
+	URI     string   `json:"uri"`
+	State   string   `json:"state"`   // Pending, Processing, Completed, Canceled, Aborted
+	Reasons []string `json:"reasons"` // for example JobCanceledAtDevice
+	Done    int      `json:"done"`    // images completed
+	ToSend  int      `json:"toSend"`  // images still to transfer
 }
 
 type xmlInput struct {
@@ -168,9 +178,24 @@ func ParseStatus(data []byte) (Status, error) {
 	var x struct {
 		State    string `xml:"State"`
 		AdfState string `xml:"AdfState"`
+		Jobs     []struct {
+			URI     string   `xml:"JobUri"`
+			State   string   `xml:"JobState"`
+			Reasons []string `xml:"JobStateReasons>JobStateReason"`
+			Done    int      `xml:"ImagesCompleted"`
+			ToSend  int      `xml:"ImagesToTransfer"`
+		} `xml:"Jobs>JobInfo"`
 	}
 	if err := xml.Unmarshal(data, &x); err != nil {
 		return Status{}, err
 	}
-	return Status{State: strings.TrimSpace(x.State), AdfState: strings.TrimSpace(x.AdfState)}, nil
+	st := Status{State: strings.TrimSpace(x.State), AdfState: strings.TrimSpace(x.AdfState), Jobs: []Job{}}
+	for _, j := range x.Jobs {
+		job := Job{URI: strings.TrimSpace(j.URI), State: strings.TrimSpace(j.State), Reasons: []string{}, Done: j.Done, ToSend: j.ToSend}
+		for _, r := range j.Reasons {
+			job.Reasons = append(job.Reasons, strings.TrimSpace(r))
+		}
+		st.Jobs = append(st.Jobs, job)
+	}
+	return st, nil
 }

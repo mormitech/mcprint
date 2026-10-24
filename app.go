@@ -43,6 +43,7 @@ type PageView struct {
 type ScanRequest struct {
 	GUID string `json:"guid"`
 	escl.Options
+	InsertAt int `json:"insertAt"` // where the first scanned page goes (0 is before the first page); negative: at the end
 }
 
 // ScanEvent is sent to the UI as the "scan" event.
@@ -68,11 +69,10 @@ type App struct {
 	caps     map[string]capsEntry
 	pages    []*Page
 	nextID   int
-	cancel   context.CancelFunc // set while a scan runs
-	theme    string             // --theme: light or dark instead of the system's setting
-	mock     *mockState         // set in demo mode (--mock)
-	mode     string             // "" for the app, "info" for a scanner's details window, "about" for the About window
-	infoGUID string             // the scanner of the details window
+	theme    string     // --theme: light or dark instead of the system's setting
+	mock     *mockState // set in demo mode (--mock)
+	mode     string     // "" for the app, "info" for a scanner's details window, "about" for the About window
+	infoGUID string     // the scanner of the details window
 	infoWins map[string]*exec.Cmd
 	scanning bool
 }
@@ -243,14 +243,18 @@ func (a *App) Scan(req ScanRequest) error {
 		return errors.New("a scan is already running")
 	}
 	ctx, cancel := context.WithCancel(a.ctx)
-	a.scanning, a.cancel = true, cancel
+	a.scanning = true
 	a.mu.Unlock()
 
 	go func() {
 		count := 0
+		at := req.InsertAt
 		a.emitScan(ScanEvent{State: "scanning", Message: "Scanning…"})
 		onPage := func(data []byte) {
-			if a.addPage(data, resolved.DPI) {
+			if a.addPageAt(data, resolved.DPI, at) {
+				if at >= 0 {
+					at++ // the next page of a stack goes behind this one
+				}
 				count++
 				a.emitPages()
 				a.emitScan(ScanEvent{State: "scanning", Message: fmt.Sprintf("Scanning… %d page(s)", count), Count: count})
@@ -263,7 +267,7 @@ func (a *App) Scan(req ScanRequest) error {
 			_, err = c.Scan(ctx, resolved, onPage)
 		}
 		a.mu.Lock()
-		a.scanning, a.cancel = false, nil
+		a.scanning = false
 		a.mu.Unlock()
 		cancel()
 		switch {
@@ -280,7 +284,10 @@ func (a *App) Scan(req ScanRequest) error {
 }
 
 // addPage keeps a scanned page (and saves it in the session). It reports false for data that is not an image.
-func (a *App) addPage(data []byte, dpi int) bool {
+func (a *App) addPage(data []byte, dpi int) bool { return a.addPageAt(data, dpi, -1) }
+
+// addPageAt is addPage with a position: 0 puts the page first, a negative position or one past the end puts it last.
+func (a *App) addPageAt(data []byte, dpi int, at int) bool {
 	cfg, err := jpeg.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return false
@@ -289,19 +296,38 @@ func (a *App) addPage(data []byte, dpi int) bool {
 	defer a.mu.Unlock()
 	p := &Page{ID: a.nextID, Data: data, Width: cfg.Width, Height: cfg.Height, DPI: dpi}
 	a.nextID++
-	a.pages = append(a.pages, p)
+	if at < 0 || at >= len(a.pages) {
+		a.pages = append(a.pages, p)
+	} else {
+		a.pages = append(a.pages[:at], append([]*Page{p}, a.pages[at:]...)...)
+	}
 	a.writePageFile(p)
 	a.saveSession()
 	return true
 }
 
-// CancelScan stops the running scan and deletes its job on the scanner.
-func (a *App) CancelScan() {
+// Scanning reports whether a scan is running, so the window can tell when it has lost track of one.
+func (a *App) Scanning() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.cancel != nil {
-		a.cancel()
+	return a.scanning
+}
+
+// ClearQueue deletes every job in the scanner's job list (a scan that was interrupted can leave one stuck there).
+func (a *App) ClearQueue(guid string) (int, error) {
+	if a.mock != nil {
+		return 0, nil
 	}
+	if a.Scanning() {
+		return 0, errors.New("a scan is running: wait until it is done")
+	}
+	c, err := a.client(guid)
+	if err != nil {
+		return 0, err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	defer cancel()
+	return c.ClearJobs(ctx)
 }
 
 // ---- Pages --------------------------------------------------------------------------------------------------

@@ -1,7 +1,11 @@
 package escl
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -194,5 +198,117 @@ func TestUnreachable(t *testing.T) {
 	c, _ = NewClient(srv.URL)
 	if _, err := c.Caps(context.Background()); err == nil || Unreachable(err) {
 		t.Fatalf("an HTTP answer is not unreachable, got %v", err)
+	}
+}
+
+func TestToBlackAndWhite(t *testing.T) {
+	src := image.NewGray(image.Rect(0, 0, 64, 64))
+	for y := 0; y < 64; y++ {
+		for x := 0; x < 64; x++ {
+			v := uint8(215) // light grey paper
+			if x < 32 {
+				v = 70 // dark grey ink
+			}
+			src.SetGray(x, y, color.Gray{Y: v})
+		}
+	}
+	var in bytes.Buffer
+	if err := jpeg.Encode(&in, src, nil); err != nil {
+		t.Fatal(err)
+	}
+	out, err := ToBlackAndWhite(in.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := jpeg.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l, r := color.GrayModel.Convert(img.At(8, 32)).(color.Gray).Y, color.GrayModel.Convert(img.At(56, 32)).(color.Gray).Y; l > 40 || r < 215 {
+		t.Fatalf("ink should be black and paper white, got %d and %d", l, r)
+	}
+}
+
+// A Brother-like scanner: it refuses black & white (a 1-bit image cannot be a JPEG) but scans grey.
+func TestScanBlackAndWhiteFallsBackToGrey(t *testing.T) {
+	src := image.NewGray(image.Rect(0, 0, 32, 32))
+	for i := range src.Pix {
+		src.Pix[i] = 200
+	}
+	var page bytes.Buffer
+	jpeg.Encode(&page, src, nil)
+	var modes []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/eSCL/ScannerStatus", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<scan:ScannerStatus xmlns:scan="x" xmlns:pwg="y"><pwg:State>Idle</pwg:State></scan:ScannerStatus>`))
+	})
+	mux.HandleFunc("/eSCL/ScanJobs", func(w http.ResponseWriter, r *http.Request) {
+		var buf bytes.Buffer
+		buf.ReadFrom(r.Body)
+		mode := "Grayscale8"
+		if strings.Contains(buf.String(), "BlackAndWhite1") {
+			mode = "BlackAndWhite1"
+		}
+		modes = append(modes, mode)
+		if mode == "BlackAndWhite1" {
+			w.WriteHeader(409)
+			return
+		}
+		w.Header().Set("Location", "/eSCL/ScanJobs/1")
+		w.WriteHeader(201)
+	})
+	mux.HandleFunc("/eSCL/ScanJobs/1/NextDocument", func(w http.ResponseWriter, r *http.Request) { w.Write(page.Bytes()) })
+	mux.HandleFunc("/eSCL/ScanJobs/1", func(w http.ResponseWriter, r *http.Request) {})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	c, _ := NewClient(srv.URL + "/eSCL")
+	var got [][]byte
+	n, err := c.Scan(context.Background(), Resolved{Options: Options{Source: "platen", Color: "bw", DPI: 300}, Width: 100, Height: 100},
+		func(b []byte) { got = append(got, b) })
+	if err != nil || n != 1 || len(got) != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	if len(modes) != 2 || modes[0] != "BlackAndWhite1" || modes[1] != "Grayscale8" {
+		t.Fatalf("expected black & white first, then grey, got %v", modes)
+	}
+	img, err := jpeg.Decode(bytes.NewReader(got[0]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := color.GrayModel.Convert(img.At(5, 5)).(color.Gray).Y; v != 255 && v != 0 {
+		t.Errorf("page is not black and white: %d", v)
+	}
+}
+
+func TestParseStatusJobs(t *testing.T) {
+	st, err := ParseStatus([]byte(`<scan:ScannerStatus xmlns:scan="x" xmlns:pwg="y"><pwg:State>Idle</pwg:State><scan:Jobs>
+<scan:JobInfo><pwg:JobUri>/eSCL/ScanJobs/a</pwg:JobUri><pwg:ImagesCompleted>1</pwg:ImagesCompleted><pwg:ImagesToTransfer>0</pwg:ImagesToTransfer><pwg:JobState>Canceled</pwg:JobState><pwg:JobStateReasons><pwg:JobStateReason>JobCanceledAtDevice</pwg:JobStateReason></pwg:JobStateReasons></scan:JobInfo>
+</scan:Jobs></scan:ScannerStatus>`))
+	if err != nil || len(st.Jobs) != 1 || st.Jobs[0].State != "Canceled" || st.Jobs[0].Done != 1 || st.Jobs[0].Reasons[0] != "JobCanceledAtDevice" {
+		t.Fatalf("%+v %v", st, err)
+	}
+}
+
+func TestClearJobs(t *testing.T) {
+	var deleted []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/eSCL/ScannerStatus", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<scan:ScannerStatus xmlns:scan="x" xmlns:pwg="y"><pwg:State>Idle</pwg:State><scan:Jobs>
+<scan:JobInfo><pwg:JobUri>/eSCL/ScanJobs/a</pwg:JobUri><pwg:JobState>Canceled</pwg:JobState></scan:JobInfo>
+<scan:JobInfo><pwg:JobUri>http://8.8.8.8/eSCL/ScanJobs/evil</pwg:JobUri><pwg:JobState>Pending</pwg:JobState></scan:JobInfo>
+<scan:JobInfo><pwg:JobUri>/eSCL/ScanJobs/b</pwg:JobUri><pwg:JobState>Processing</pwg:JobState></scan:JobInfo>
+</scan:Jobs></scan:ScannerStatus>`))
+	})
+	mux.HandleFunc("/eSCL/ScanJobs/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			deleted = append(deleted, r.URL.Path)
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	c, _ := NewClient(srv.URL + "/eSCL")
+	n, err := c.ClearJobs(context.Background())
+	if err != nil || n != 2 || len(deleted) != 2 || deleted[0] != "/eSCL/ScanJobs/a" || deleted[1] != "/eSCL/ScanJobs/b" {
+		t.Fatalf("n=%d err=%v deleted=%v", n, err, deleted)
 	}
 }

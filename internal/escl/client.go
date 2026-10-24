@@ -114,6 +114,31 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	return ParseStatus(data)
 }
 
+// ClearJobs deletes every job in the scanner's job list, including one that is stuck. It returns how many it deleted.
+func (c *Client) ClearJobs(ctx context.Context) (int, error) {
+	st, err := c.Status(ctx)
+	if err != nil {
+		return 0, errors.New("the scanner is not reachable")
+	}
+	base, _ := url.Parse(c.Base)
+	deleted := 0
+	for _, j := range st.Jobs {
+		ju, err := base.Parse(j.URI)
+		if err != nil || ju.Host != base.Host {
+			continue // a job location on another host is never followed
+		}
+		res, err := c.do(ctx, http.MethodDelete, strings.TrimRight(ju.String(), "/"), "", nil)
+		if err != nil {
+			return deleted, fmt.Errorf("lost the scanner while clearing its queue: %w", err)
+		}
+		res.Body.Close()
+		if res.StatusCode < 300 || res.StatusCode == http.StatusNotFound {
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
 // Unreachable reports whether err is a network failure (no route, refused, timed out) rather than an answer from the scanner.
 func Unreachable(err error) bool {
 	var ne net.Error
@@ -151,35 +176,53 @@ func sleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
+// createJob posts the scan settings and returns the scanner's answer. It answers 503 while it is busy (e.g. finishing
+// the previous job), so that is retried briefly.
+func (c *Client) createJob(ctx context.Context, r Resolved) (*http.Response, error) {
+	body := []byte(SettingsXML(r))
+	for attempt := 1; ; attempt++ {
+		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		// Brother scanners ignore the whole request body unless this is application/xml, not text/xml.
+		res, err := c.do(cctx, http.MethodPost, c.Base+"/ScanJobs", "application/xml", body)
+		cancel()
+		if err != nil {
+			if Unreachable(err) {
+				return nil, errors.New("could not reach the scanner: is it switched on and on the same network?")
+			}
+			return nil, fmt.Errorf("could not start the scan: %w", err)
+		}
+		if res.StatusCode != http.StatusServiceUnavailable || attempt == 6 {
+			return res, nil
+		}
+		res.Body.Close()
+		if err := sleep(ctx, 2*time.Second); err != nil {
+			return nil, err
+		}
+	}
+}
+
 // Scan runs one job and hands every page (a JPEG) to onPage as soon as the scanner delivers it. Cancelling ctx
 // cancels the job on the scanner. It returns the number of pages delivered.
 func (c *Client) Scan(ctx context.Context, r Resolved, onPage func(jpeg []byte)) (int, error) {
 	if err := c.checkReady(ctx, r.Source); err != nil {
 		return 0, err
 	}
-	body := []byte(SettingsXML(r))
-
-	// The scanner answers 503 while it is busy (e.g. finishing the previous job), so retry briefly.
-	var res *http.Response
-	for attempt := 1; ; attempt++ {
-		var err error
-		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		// Brother scanners ignore the whole request body unless this is application/xml, not text/xml.
-		res, err = c.do(cctx, http.MethodPost, c.Base+"/ScanJobs", "application/xml", body)
-		cancel()
-		if err != nil {
-			if Unreachable(err) {
-				return 0, errors.New("could not reach the scanner: is it switched on and on the same network?")
-			}
-			return 0, fmt.Errorf("could not start the scan: %w", err)
-		}
-		if res.StatusCode != http.StatusServiceUnavailable || attempt == 6 {
-			break
-		}
+	res, err := c.createJob(ctx, r)
+	if err != nil {
+		return 0, err
+	}
+	// Black & white as JPEG is refused by some scanners (Brother answers 409: a 1-bit image cannot be a JPEG, and
+	// they offer no other image format). Whatever the refusal, scan in grey instead and make every page black &
+	// white here.
+	toBW := false
+	if r.Color == "bw" && res.StatusCode != http.StatusCreated {
 		res.Body.Close()
-		if err := sleep(ctx, 2*time.Second); err != nil {
+		g := r
+		g.Color = "gray"
+		if res, err = c.createJob(ctx, g); err != nil {
 			return 0, err
 		}
+		toBW = true
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusCreated {
@@ -233,6 +276,11 @@ func (c *Client) Scan(ctx context.Context, r Resolved, onPage func(jpeg []byte))
 			}
 			pages++
 			misses = 0
+			if toBW {
+				if bw, err := ToBlackAndWhite(data); err == nil {
+					data = bw
+				}
+			}
 			onPage(data)
 			if r.Source == "platen" {
 				return pages, nil // the flatbed yields one page per job

@@ -6,10 +6,6 @@ export function AddDevice(arg1) {
   return window['go']['main']['App']['AddDevice'](arg1);
 }
 
-export function CancelScan() {
-  return window['go']['main']['App']['CancelScan']();
-}
-
 export function Capabilities(arg1) {
   return window['go']['main']['App']['Capabilities'](arg1);
 }
@@ -20,6 +16,10 @@ export function Choices(arg1, arg2, arg3) {
 
 export function ClearPages() {
   return window['go']['main']['App']['ClearPages']();
+}
+
+export function ClearQueue(arg1) {
+  return window['go']['main']['App']['ClearQueue'](arg1);
 }
 
 export function DeletePage(arg1) {
@@ -64,6 +64,10 @@ export function SavePrefs(arg1) {
 
 export function Scan(arg1) {
   return window['go']['main']['App']['Scan'](arg1);
+}
+
+export function Scanning() {
+  return window['go']['main']['App']['Scanning']();
 }
 
 export function Search() {

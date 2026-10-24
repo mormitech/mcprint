@@ -14,13 +14,14 @@ html, body { margin:0; height:100%; background:var(--bg); color:var(--text); fon
 body { display:grid; grid-template-columns: 280px 1fr; }
 h1 { margin:0 0 12px; font-size:20px; } h2 { margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
 #side { background:var(--panel); border-right:1px solid var(--line); padding:16px; overflow:auto; display:flex; flex-direction:column; gap:8px; }
-main { padding:16px; overflow:auto; display:flex; flex-direction:column; gap:16px; }
+main { padding:16px; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:16px; }
 .row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .muted { color:var(--muted); font-size:12px; margin:0; }
 button, select, input { font:inherit; color:var(--text); background:var(--btn); border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
 button { cursor:pointer; } button:hover:not(:disabled) { border-color:var(--accent); } button:disabled { opacity:.45; cursor:default; }
 button.primary { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:600; }
 button.danger:hover:not(:disabled) { border-color:var(--bad); }
+#devices { display:flex; flex-direction:column; gap:8px; }
 .device { padding:10px; border:1px solid var(--line); border-radius:8px; cursor:pointer; display:grid; gap:2px; position:relative; }
 .device:hover { border-color:var(--accent); } .device.sel { border-color:var(--accent); background:var(--sel); }
 .device .name { font-weight:600; padding-right:22px; } .device .sub { color:var(--muted); font-size:12px; }
@@ -51,6 +52,7 @@ button.danger:hover:not(:disabled) { border-color:var(--bad); }
   -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
 #viewer .bar { top:16px; } #viewer .bar.left { left:16px; padding:7px 14px; font-size:13px; } #viewer .bar.mid { left:50%; transform:translateX(-50%); }
 #viewer .bar.right { right:16px; }
+#viewer .sep { width:1px; height:18px; margin:0 4px; background:var(--glass-line); }
 #viewer .pct { min-width:52px; text-align:center; font-size:13px; font-variant-numeric:tabular-nums; }
 #viewer button { width:32px; height:32px; padding:0; display:grid; place-items:center; border:none; border-radius:50%; background:none; color:inherit; }
 #viewer button:hover:not(:disabled) { background:var(--btn); } #viewer button:disabled { opacity:.3; }
@@ -72,7 +74,7 @@ body.detail-mode { display:block; } body.detail-mode #side, body.detail-mode mai
 #detail { padding:20px 24px 28px; }
 #detail h3 { margin:0 0 4px; font-size:18px; } #detail h4 { margin:18px 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
 #detail table { width:100%; border-collapse:collapse; } #detail th, #detail td { text-align:left; vertical-align:top; padding:5px 0; border-top:1px solid var(--line); font-size:13px; }
-#detail th { width:140px; font-weight:400; color:var(--muted); padding-right:10px; } #detail td { word-break:break-all; user-select:text; }
+#detail th { width:140px; font-weight:400; color:var(--muted); padding-right:10px; } #detail td { word-break:break-all; user-select:text; } #detail button.retry { margin-top:6px; }
 
 .page { cursor:grab; user-select:none; -webkit-user-select:none; touch-action:none; } .page img { -webkit-user-drag:none; }
 body.dragging, body.dragging * { cursor:grabbing !important; }
@@ -87,8 +89,8 @@ body.dragging, body.dragging * { cursor:grabbing !important; }
 .seg button:disabled { opacity:1; cursor:default; } .seg button:disabled:not(.on) { opacity:.45; }
 .seg button span { white-space:nowrap; }
 
-#pages { align-items:start; }
-.page { min-width:0; overflow:hidden; } .page > * { min-width:0; }
+#pages { align-items:start; position:relative; }
+.page { position:relative; min-width:0; } .page > * { min-width:0; }
 .page img { display:block; max-width:100%; }
 .page .tools { display:flex; align-items:center; gap:4px; }
 .page .tools .label { flex:1; display:flex; align-items:baseline; gap:6px; overflow:hidden; white-space:nowrap; }
@@ -108,3 +110,48 @@ h1 { display:flex; align-items:center; gap:9px; } .logo-sm { height:20px; width:
 .logo, .logo-sm { filter:none; }
 @media (prefers-color-scheme: dark) { .logo, .logo-sm { filter:invert(1); } }
 .state { display:flex; align-items:center; gap:10px; flex-wrap:wrap; } button.retry { padding:3px 12px; font-size:12px; }
+
+/* The big Scan button below the settings, with the scanner's message beside it. */
+.go { display:flex; align-items:center; gap:18px; margin-top:16px; } .go-state { min-width:0; } .go-state .state { margin-top:0; }
+.go-btn { width:80px; height:80px; padding:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; border-radius:13px; font-size:13px; font-weight:600; box-shadow:0 1px 3px var(--shadow); }
+.go-btn svg { width:32px; height:32px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+.go-btn.primary:hover:not(:disabled) { filter:brightness(1.08); }
+
+/* Where the next scan goes: a + in the gap beside a page (on hover) puts the marker there. */
+.ins { position:absolute; top:0; bottom:0; width:28px; padding:0; border:none; background:none; display:flex; align-items:center; justify-content:center; z-index:2; cursor:pointer; opacity:0; transition:opacity .15s; }
+.ins-l { left:-21px; } .ins-r { right:-16px; }
+.ins-r { display:none; } .page.row-end > .ins-r { display:flex; }
+.page.row-start > .ins-l { left:-16px; } /* the outer ones stay inside the padding, so the area does not scroll sideways */
+.ins:hover { opacity:1; border:none; }
+.page:has(.ins:hover) { z-index:4; } /* the + stays above the neighbouring page it overlaps */
+.ins::after { content:attr(data-tip); position:absolute; bottom:calc(50% + 24px); left:50%; transform:translate(-50%,4px); white-space:nowrap; pointer-events:none;
+  background:var(--tip); color:var(--tip-text); border:1px solid var(--line); border-radius:8px; padding:6px 11px; font-size:12px; font-weight:500;
+  box-shadow:0 8px 22px var(--shadow); opacity:0; transition:opacity .16s .25s, transform .16s .25s; }
+.ins:hover::after { opacity:1; transform:translate(-50%,0); }
+#pages > .page.row-start > .ins-l::after { left:0; transform:translate(0,4px); } #pages > .page.row-start > .ins-l:hover::after { transform:translate(0,0); }
+.ins-r::after { left:auto; right:0; transform:translate(0,4px); } .ins-r:hover::after { transform:translate(0,0); }
+.ins svg { width:28px; height:28px; padding:6px; box-sizing:border-box; border-radius:50%; color:#fff; fill:none; stroke:currentColor; stroke-width:2.6; stroke-linecap:round;
+  background:color-mix(in srgb, var(--accent) 82%, transparent); border:2px solid rgba(255,255,255,.85); box-shadow:0 2px 8px var(--shadow); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); transition:transform .15s; }
+.ins:hover svg { transform:scale(1.12); }
+.slot + .page > .ins-l, .page:has(+ .slot) > .ins-r { display:none !important; }
+#pages.locked .ins { display:none; }
+.slot { position:relative; align-self:stretch; min-height:240px; border:2px dashed var(--accent); border-radius:8px; background:var(--sel); display:grid; place-items:center; min-width:0; }
+.slot-body { display:grid; justify-items:center; gap:4px; color:var(--accent); text-align:center; padding:12px; }
+.slot-body svg { width:34px; height:34px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; }
+.slot-body small { color:var(--muted); font-size:12px; }
+.slot-x { position:absolute; top:6px; right:6px; width:24px; height:24px; padding:0; display:grid; place-items:center; border:none; border-radius:50%; background:none; color:var(--muted); }
+.slot-x:disabled { opacity:.35; cursor:default; }
+.slot-x:hover:not(:disabled) { background:var(--btn); color:var(--text); border:none; }
+.slot-x svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
+
+/* the marker that is fading into the page that took its place */
+.slot.morph-out { position:absolute; margin:0; pointer-events:none; z-index:3; }
+
+/* Previous / next page in the viewer: larger glass buttons that fill with the accent colour on hover. */
+#viewer button.nav { width:42px; height:42px; justify-content:center; border-radius:50%; background:var(--glass); border:1px solid var(--glass-line); color:var(--text); opacity:.9;
+  box-shadow:0 8px 28px var(--shadow); transition:transform .18s cubic-bezier(.2,.8,.2,1), background .18s, color .18s, opacity .18s, box-shadow .18s; }
+#viewer button.nav svg { width:22px; height:22px; stroke-width:2.1; flex:none; transition:transform .18s cubic-bezier(.2,.8,.2,1); }
+#viewer button.nav:hover:not(:disabled) { background:var(--accent); color:var(--accent-text); opacity:1; transform:translateY(-50%) scale(1.08); box-shadow:0 10px 32px var(--shadow); }
+#viewer button.nav.prev:hover:not(:disabled) svg { transform:translateX(-2px); } #viewer button.nav.next:hover:not(:disabled) svg { transform:translateX(2px); }
+#viewer button.nav:active:not(:disabled) { transform:translateY(-50%) scale(.96); }
+#viewer button.nav:disabled { opacity:0; pointer-events:none; } /* no page that way: the button goes away */

@@ -5,13 +5,13 @@ import {main} from '../models';
 
 export function AddDevice(arg1:string):Promise<escl.Device>;
 
-export function CancelScan():Promise<void>;
-
 export function Capabilities(arg1:string):Promise<escl.Caps>;
 
 export function Choices(arg1:string,arg2:string,arg3:boolean):Promise<escl.Choices>;
 
 export function ClearPages():Promise<Array<main.PageView>>;
+
+export function ClearQueue(arg1:string):Promise<number>;
 
 export function DeletePage(arg1:number):Promise<Array<main.PageView>>;
 
@@ -34,6 +34,8 @@ export function RemoveDevice(arg1:string):Promise<void>;
 export function SavePrefs(arg1:string):Promise<void>;
 
 export function Scan(arg1:main.ScanRequest):Promise<void>;
+
+export function Scanning():Promise<boolean>;
 
 export function Search():Promise<void>;
 

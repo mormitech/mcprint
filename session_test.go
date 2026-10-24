@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"image"
+	"image/jpeg"
+	"testing"
+)
 
 func TestSessionRoundTrip(t *testing.T) {
 	a := &App{cacheDir: t.TempDir(), nextID: 1}
@@ -58,6 +63,31 @@ func TestMovePageTo(t *testing.T) {
 			if got[i] != c.want[i] {
 				t.Fatalf("move %d to %d: got %v, want %v", c.id, c.to, got, c.want)
 			}
+		}
+	}
+}
+
+func TestAddPageAt(t *testing.T) {
+	var buf bytes.Buffer
+	jpeg.Encode(&buf, image.NewGray(image.Rect(0, 0, 8, 8)), nil)
+	a := &App{cacheDir: t.TempDir(), nextID: 1}
+	order := func() (out []int) {
+		for _, p := range a.Pages() {
+			out = append(out, p.ID)
+		}
+		return
+	}
+	a.addPage(buf.Bytes(), 300)       // 1
+	a.addPage(buf.Bytes(), 300)       // 2: 1 2
+	a.addPageAt(buf.Bytes(), 300, 1)  // 3 between them: 1 3 2
+	a.addPageAt(buf.Bytes(), 300, 0)  // 4 first: 4 1 3 2
+	a.addPageAt(buf.Bytes(), 300, 99) // 5 past the end goes last: 4 1 3 2 5
+	a.addPageAt(buf.Bytes(), 300, -1) // 6 last
+	want := []int{4, 1, 3, 2, 5, 6}
+	got := order()
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
 		}
 	}
 }

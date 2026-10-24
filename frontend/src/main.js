@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  Version, Devices, Capabilities, Mode, ShowInfo, Search, AddDevice, RemoveDevice, Choices, Scan, CancelScan, Pages, DeletePage, MovePage,
+  Version, Devices, Capabilities, Mode, ShowInfo, Search, AddDevice, RemoveDevice, Choices, Scan, Scanning, ClearQueue, Pages, DeletePage, MovePage,
   ClearPages, MovePageTo, ExportPDF, LoadPrefs, SavePrefs, Status,
 } from '../wailsjs/go/main/App';
 import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
@@ -19,6 +19,10 @@ const GLYPH = {
   left: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg>',
   right: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg>',
   trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M10 7V4.5h4V7M6.5 7l.8 12.5h9.4L17.5 7M10 11v5.5M14 11v5.5"/></svg>',
+};
+// The big Scan button: a flatbed scanner with the lid raised over the glass.
+const BIG = {
+  scan: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10.5 8 4.5h8l2 6"/><rect x="2.5" y="10.5" width="19" height="9" rx="2.2"/><path d="M5.5 15h13"/><path d="M19 17.4h.01"/></svg>',
 };
 const PAPER = {a4: 'A4', a5: 'A5', letter: 'Letter', legal: 'Legal', max: 'Largest'};
 
@@ -124,6 +128,12 @@ function seg(label, key, items, current, disabled) {
     `<button type="button" role="radio" aria-checked="${it.value === current}" class="${it.value === current ? 'on' : ''}" data-seg="${key}" data-value="${esc(it.value)}" ${disabled || items.length < 2 ? 'disabled' : ''}>${it.icon || ''}<span>${esc(it.label)}</span></button>`).join('')}</div></div>`;
 }
 
+// Where the next scan goes: null means at the end; a number is the position (0 is before the first page), shown as a
+// dashed empty page in the grid.
+let insertAt = null;
+
+let expiring = null; // the success message that has its timer running
+
 function renderControls() {
   const el = $('controls');
   const d = devices.find((x) => x.guid === selected);
@@ -132,8 +142,16 @@ function renderControls() {
     return;
   }
   const busy = scan.state === 'scanning';
+  // a success message ("Scanned 1 page(s)", "Saved …") goes away after a minute
+  if (scan.state === 'done' && scan !== expiring) {
+    const mine = expiring = scan;
+    setTimeout(() => { if (scan === mine) { scan = {state: 'idle', message: ''}; renderControls(); } }, 60000);
+  }
   let form = '';
+  let go = ''; // the big button below the settings
   if (ready && choices) {
+    // a running scan cannot be stopped from here: the button just waits
+    go = `<button id="scan" class="go-btn primary${busy ? '' : ' tip'}" ${busy ? '' : `data-tip="${insertAt !== null && pages.length ? `Inserts the page as page ${insertAt + 1}` : pages.length ? `Adds page ${pages.length + 1} to this document` : 'Starts a new document'}"`} ${d.online && !busy ? '' : 'disabled'}>${BIG.scan}<span>${busy ? 'Scanning…' : insertAt !== null && pages.length ? 'Insert page' : pages.length ? 'Add page' : 'Scan'}</span></button>`;
     form = `<div class="form">
       ${seg('Source', 'source', choices.sources.map((v) => ({value: v, label: SOURCE[v], icon: ICON[v]})), opts.source, busy)}
       ${choices.canDuplex && opts.source === 'feeder' ? `<label class="check"><input type="checkbox" id="o-duplex" ${opts.duplex ? 'checked' : ''} ${busy ? 'disabled' : ''}> Both sides</label>` : ''}
@@ -142,16 +160,13 @@ function renderControls() {
         ? seg('Resolution', 'dpi', choices.dpis.map((v) => ({value: String(v), label: `${v} dpi`})), String(opts.dpi), busy)
         : `<label>Resolution<select id="o-dpi" ${busy ? 'disabled' : ''}>${choices.dpis.map((v) => `<option value="${v}" ${v === opts.dpi ? 'selected' : ''}>${v} dpi</option>`).join('')}</select></label>`}
       ${seg('Paper', 'paper', choices.papers.map((v) => ({value: v, label: PAPER[v] ?? v})), opts.paper, busy)}
-      ${busy
-        ? '<button id="cancel" class="danger">Cancel</button>'
-        : `<button id="scan" class="primary tip" data-tip="${pages.length ? `Adds page ${pages.length + 1} to this document` : 'Starts a new document'}" ${d.online ? '' : 'disabled'}>${pages.length ? '+ ' : ''}Scan</button>`}
     </div>`;
   } else if (!scan.message) {
     form = '<p class="empty">Reading what the scanner can do…</p>';
   }
   const hint = !d.online && !busy ? '<div class="state error">This scanner is offline right now.</div>' : '';
-  const st = scan.message ? `<div class="state ${scan.state}">${esc(scan.message)}${scan.state === 'error' && scan.retry ? ` <button id="retry" class="retry">${scan.retry === 'scan' ? 'Try again' : 'Reconnect'}</button>` : ''}</div>` : '';
-  el.innerHTML = `<div class="row"><strong>${esc(d.name)}</strong><button id="info-btn" class="icon tip tip-left" data-tip="Scanner details" aria-label="Scanner details">i</button></div><div style="height:10px"></div>${form}${hint}${st}`;
+  const st = scan.message && !busy ? `<div class="state ${scan.state}">${esc(scan.message)}${scan.state === 'error' && scan.retry ? ` <button id="retry" class="retry">${scan.retry === 'scan' ? 'Try again' : 'Reconnect'}</button>` : ''}</div>` : '';
+  el.innerHTML = `<div class="row"><strong>${esc(d.name)}</strong><button id="info-btn" class="icon tip tip-left" data-tip="Scanner details" aria-label="Scanner details">i</button></div><div style="height:10px"></div>${form}${go ? `<div class="go">${go}<div class="go-state">${hint}${st}</div></div>` : `${hint}${st}`}`;
 }
 
 $('controls').addEventListener('change', async (ev) => {
@@ -181,17 +196,27 @@ $('controls').addEventListener('click', async (ev) => {
     savePrefs();
     return;
   }
-  if (ev.target.id === 'cancel') { CancelScan(); return; }
-  if (ev.target.id === 'retry') { scan.retry === 'scan' ? startScan() : retryConnect(); return; }
-  if (ev.target.id !== 'scan') return;
+  // the big buttons hold an icon and a label, so the click may land on those
+  const btn = ev.target.closest('button');
+  if (!btn || btn.disabled) return;
+  if (btn.id === 'retry') { scan.retry === 'scan' ? startScan() : retryConnect(); return; }
+  if (btn.id !== 'scan') return;
   startScan();
 });
+
+// If the window thinks a scan is running but the program says none is (an event got lost), do not stay stuck.
+setInterval(async () => {
+  if (scan.state !== 'scanning') return;
+  try {
+    if (!(await Scanning()) && scan.state === 'scanning') { scan = {state: 'idle', message: ''}; renderControls(); }
+  } catch { /* the next tick tries again */ }
+}, 3000);
 
 async function startScan() {
   scan = {state: 'scanning', message: 'Starting…'};
   renderControls();
   try {
-    await Scan({guid: selected, ...opts});
+    await Scan({guid: selected, ...opts, insertAt: insertAt ?? -1});
   } catch (e) {
     scan = fail(e, 'scan');
     renderControls();
@@ -216,12 +241,46 @@ function renderBar() {
     : '';
 }
 
-function renderPages() {
+const VIEW_X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>';
+const SLOT_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg>';
+
+// The dashed empty page that marks where the next scan will land.
+const slotHtml = (n) => `<div class="slot"><button class="slot-x" data-unset="1" title="Add to the end again" aria-label="Add to the end again" ${scan.state === 'scanning' ? 'disabled' : ''}>${VIEW_X}</button>
+  <div class="slot-body">${SLOT_ICON}<b>Next scan goes here</b><small>as page ${n}</small></div></div>`;
+
+const EASE = 'cubic-bezier(.2,.8,.2,1)';
+const SLOT_MS = 200;
+
+// Takes the dashed marker away with a short fade, then draws the grid again (the pages slide into the freed place).
+async function removeSlot() {
+  const slot = $('pages').querySelector('.slot');
+  insertAt = null;
+  renderControls();
+  if (slot) await slot.animate([{opacity: 1, transform: 'scale(1)'}, {opacity: 0, transform: 'scale(.9)'}], {duration: SLOT_MS - 40, easing: 'ease-in', fill: 'forwards'}).finished.catch(() => {});
+  renderPages();
+}
+
+// morph: the page that just arrived takes the place of the dashed marker, so the marker fades into it.
+function renderPages(morph = false) {
   cancelDrag();
+  const grid = $('pages');
+  const oldSlot = grid.querySelector('.slot');
+  const hadSlot = !!oldSlot;
+  let ghost = null;
+  if (morph && oldSlot) {
+    const g = grid.getBoundingClientRect(), r = oldSlot.getBoundingClientRect();
+    ghost = oldSlot.cloneNode(true);
+    ghost.classList.add('morph-out');
+    Object.assign(ghost.style, {left: `${r.left - g.left}px`, top: `${r.top - g.top}px`, width: `${r.width}px`, height: `${r.height}px`});
+  }
+  const before = new Map([...grid.children].filter((c) => c.dataset.id).map((c) => [c.dataset.id, c.getBoundingClientRect()]));
+  if (insertAt !== null && (!pages.length || insertAt > pages.length)) insertAt = pages.length ? pages.length : null;
   renderControls();
   renderBar();
-  $('pages').innerHTML = pages.map((p, i) => `
+  const insBtn = (side) => `<button class="ins ins-${side}" data-ins="${side}" data-tip="Put the next scan here" aria-label="Put the next scan here">${SLOT_ICON}</button>`;
+  const out = pages.map((p, i) => `${insertAt === i ? slotHtml(i + 1) : ''}
     <div class="page" data-id="${p.id}">
+      ${insBtn('l')}${insBtn('r')}
       <img src="/page/${p.id}.jpg" alt="Page ${i + 1}" data-view="${p.id}" loading="lazy" draggable="false">
       <div class="tools">
         <span class="label"><b class="n">${i + 1}</b><small>${p.width}×${p.height}</small></span>
@@ -229,11 +288,67 @@ function renderPages() {
         <button class="ic" data-move="1" ${i === pages.length - 1 ? 'disabled' : ''} title="Move later" aria-label="Move later">${GLYPH.right}</button>
         <button class="ic danger" data-del="1" title="Delete page" aria-label="Delete page">${GLYPH.trash}</button>
       </div>
-    </div>`).join('');
+    </div>`);
+  if (insertAt === pages.length && pages.length) out.push(slotHtml(pages.length + 1));
+  grid.innerHTML = out.join('');
+  grid.classList.toggle('locked', scan.state === 'scanning');
+  markRows();
+  // the pages slide to their new places, and a new marker grows in
+  for (const c of cardsOf()) {
+    const a = before.get(c.dataset.id);
+    if (!a) continue;
+    const b = c.getBoundingClientRect(), dx = a.left - b.left, dy = a.top - b.top;
+    if (dx || dy) c.animate([{transform: `translate(${dx}px, ${dy}px)`}, {transform: 'none'}], {duration: 260, easing: EASE});
+  }
+  for (const c of cardsOf()) {
+    if (!before.has(c.dataset.id)) c.animate([{opacity: 0, transform: 'scale(.94)'}, {opacity: 1, transform: 'none'}], {duration: 380, easing: EASE});
+  }
+  if (ghost) {
+    grid.appendChild(ghost);
+    ghost.animate([{opacity: 1}, {opacity: 0, transform: 'scale(1.03)'}], {duration: 380, easing: 'ease-out'}).onfinish = () => ghost.remove();
+  }
+  const slot = grid.querySelector('.slot');
+  if (slot && !hadSlot) slot.animate([{opacity: 0, transform: 'scale(.88)'}, {opacity: 1, transform: 'scale(1)'}], {duration: SLOT_MS + 40, easing: EASE});
+}
+
+// The page cards in the grid (the dashed marker is not one).
+const cardsOf = () => [...$('pages').children].filter((c) => c.classList.contains('page'));
+
+// Marks the first and last card of each row of the grid: a + sits before every row's first card and after its last one
+// (between two cards in a row, the next card's + serves both).
+function markRows() {
+  const cards = cardsOf();
+  cards.forEach((c, i) => {
+    c.classList.toggle('row-start', !cards[i - 1] || c.offsetTop > cards[i - 1].offsetTop);
+    c.classList.toggle('row-end', !cards[i + 1] || cards[i + 1].offsetTop > c.offsetTop);
+  });
+}
+new ResizeObserver(markRows).observe($('pages'));
+
+// After pages were moved or deleted in the grid: the marker's number is how many pages are in front of it.
+function syncSlot() {
+  const slot = $('pages').querySelector('.slot');
+  if (!slot) return;
+  insertAt = cardsOf().filter((c) => c.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING).length;
+  const sm = slot.querySelector('small');
+  if (sm) sm.textContent = `as page ${insertAt + 1}`;
+  renderControls();
 }
 
 $('pages').addEventListener('click', async (ev) => {
   if (justDragged) { justDragged = false; return; } // the click that ends a drag is not a click
+  if (ev.target.closest('[data-unset]')) {
+    if (scan.state !== 'scanning') removeSlot();
+    return;
+  }
+  const ins = ev.target.closest('[data-ins]');
+  if (ins) {
+    if (scan.state === 'scanning') return;
+    const card = ins.closest('.page');
+    insertAt = cardsOf().indexOf(card) + (ins.dataset.ins === 'r' ? 1 : 0);
+    renderPages();
+    return;
+  }
   const t = ev.target.closest('[data-view], [data-del], [data-move]') || ev.target;
   const id = Number(t.closest('.page')?.dataset.id);
   if (t.dataset.view) openViewer(Number(t.dataset.view), t);
@@ -242,7 +357,7 @@ $('pages').addEventListener('click', async (ev) => {
 });
 
 $('pages-bar').addEventListener('click', async (ev) => {
-  if (ev.target.id === 'clear') { pages = await ClearPages(); renderPages(); }
+  if (ev.target.id === 'clear') { insertAt = null; pages = await ClearPages(); renderPages(); }
   if (ev.target.id === 'pdf') {
     try {
       const path = await ExportPDF();
@@ -299,8 +414,26 @@ EventsOn('searching', (on) => {
   if (on) { manual.seen = true; return; }
   if (manual.seen) setTimeout(endManual, Math.max(0, manual.started + 1000 - Date.now()));
 });
-EventsOn('pages', (list) => { pages = list || []; renderPages(); });
-EventsOn('scan', (ev) => { scan = ev.state === 'error' ? {...ev, retry: 'scan'} : ev; renderControls(); renderPages(); });
+EventsOn('pages', (list) => {
+  list = list || [];
+  // the first page that arrives while a scan is inserting turns the dashed marker into that page
+  const morph = insertAt !== null && scan.state === 'scanning' && list.length > pages.length;
+  if (morph) insertAt = null;
+  pages = list;
+  renderPages(morph);
+});
+EventsOn('scan', (ev) => {
+  scan = ev.state === 'error' ? {...ev, retry: 'scan'} : ev;
+  if (ev.state === 'done' && insertAt !== null) { // the insertion is finished: the next scan goes to the end again
+    removeSlot();
+    return;
+  }
+  renderControls();
+  renderBar();
+  // no new drawing of the grid here: a page may just be fading in. Only what depends on the scan state changes.
+  $('pages').classList.toggle('locked', scan.state === 'scanning');
+  $('pages').querySelectorAll('.slot-x').forEach((x) => { x.disabled = scan.state === 'scanning'; });
+});
 
 (async () => {
   const mode = await Mode();
@@ -334,6 +467,16 @@ function makeAndModel(c) {
   return model.toLowerCase().startsWith(make.toLowerCase()) ? model : `${make} ${model}`.trim();
 }
 
+const JOB_STATE = {Canceled: 'cancelled', Completed: 'completed', Aborted: 'failed', Processing: 'running', Pending: 'waiting'};
+// "JobCanceledAtDevice" -> "canceled at device"
+const reason = (r) => r.replace(/^Job/, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+
+function queueRows(jobs) {
+  if (!jobs.length) return 'empty';
+  const rows = jobs.map((j, i) => `${i + 1}. ${esc(JOB_STATE[j.state] ?? j.state)}${j.reasons.length ? ` (${esc(j.reasons.map(reason).join(', '))})` : ''}, ${j.done} page${j.done === 1 ? '' : 's'} scanned`);
+  return `${jobs.length} job${jobs.length === 1 ? '' : 's'} kept by the scanner<br>${rows.join('<br>')}<br><button id="clear-queue" class="retry">Clear queue</button> <span id="queue-msg" class="muted"></span>`;
+}
+
 function renderDetails(d, caps, status, err) {
   const base = `${d.scheme}://${d.host.includes(':') ? `[${d.host}]` : d.host}:${d.port}${d.root ? '/' + d.root : ''}`;
   const alive = status ? 'online' : 'not reachable right now';
@@ -356,15 +499,37 @@ function renderDetails(d, caps, status, err) {
         <tr><th>eSCL version</th><td>${esc(caps.version) || '–'}</td></tr>
         <tr><th>UUID</th><td>${esc(caps.uuid) || '–'}</td></tr>
         ${status ? `<tr><th>Status</th><td>${esc(status.state)}${status.adfState ? `, feeder: ${esc(status.adfState.replace('ScannerAdf', '').toLowerCase())}` : ''}</td></tr>` : ''}
+        ${status ? `<tr><th>Job queue</th><td>${queueRows(status.jobs || [])}</td></tr>` : ''}
         ${caps.feederCapacity ? `<tr><th>Feeder capacity</th><td>${caps.feederCapacity} sheets</td></tr>` : ''}
         ${inputRows('Flatbed', caps.platen)}${inputRows('Feeder, one side', caps.simplex)}${inputRows('Feeder, both sides', caps.duplex)}
       </table>`}`;
 }
 
+// Clear queue (details window): delete every job the scanner keeps, then show the list again.
+let detailGuid = null;
+$('detail').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('#clear-queue');
+  if (!btn || !detailGuid) return;
+  btn.disabled = true;
+  try {
+    const n = await ClearQueue(detailGuid);
+    const [caps, status] = await Promise.all([Capabilities(detailGuid), Status(detailGuid).catch(() => null)]);
+    const d = (await Devices()).find((x) => x.guid === detailGuid);
+    renderDetails(d, caps, status);
+    const msg = $('queue-msg');
+    if (msg) msg.textContent = `Cleared ${n} job${n === 1 ? '' : 's'}`;
+  } catch (e) {
+    btn.disabled = false;
+    const msg = $('queue-msg');
+    if (msg) msg.textContent = errText(e);
+  }
+});
+
 // The details window (the program started with --info) shows this instead of the app.
 async function showDetailsWindow(guid) {
   document.body.classList.add('detail-mode');
   $('detail').hidden = false;
+  detailGuid = guid;
   const d = (await Devices()).find((x) => x.guid === guid);
   if (!d) { $('detail').innerHTML = '<p class="muted">This scanner is not known (any more).</p>'; return; }
   renderDetails(d);
@@ -401,7 +566,7 @@ function cancelDrag(restore = true) {
 
 // Numbers the pages as they stand now; the page in the air gets the number it would have if dropped here.
 function renumber() {
-  [...$('pages').children].forEach((c, i) => {
+  cardsOf().forEach((c, i) => {
     const n = c.querySelector('.n');
     if (n) n.textContent = i + 1;
     if (c === drag?.card) {
@@ -435,7 +600,8 @@ function flip(mutate, lift) {
 
 // Keeps the first card's "earlier" and the last card's "later" button disabled.
 function updateArrows() {
-  const cards = [...$('pages').children];
+  markRows();
+  const cards = cardsOf();
   cards.forEach((c, i) => {
     c.querySelector('[data-move="-1"]').disabled = i === 0;
     c.querySelector('[data-move="1"]').disabled = i === cards.length - 1;
@@ -456,7 +622,9 @@ async function deleteCard(id) {
   flip(() => card.remove());
   renumber();
   updateArrows();
+  syncSlot();
   try { pages = await backend; } catch { pages = await Pages(); renderPages(); return; }
+  if (!pages.length) { insertAt = null; renderPages(); return; }
   renderBar();
   renderControls();
 }
@@ -465,18 +633,20 @@ async function deleteCard(id) {
 async function moveCard(id, delta) {
   const grid = $('pages');
   const card = grid.querySelector(`.page[data-id="${id}"]`);
-  const other = delta < 0 ? card?.previousElementSibling : card?.nextElementSibling;
+  const cards = cardsOf();
+  const other = card ? cards[cards.indexOf(card) + delta] : null;
   if (!card || !other) return;
   flip(() => grid.insertBefore(card, delta < 0 ? other : other.nextElementSibling), card);
   renumber();
   updateArrows();
+  syncSlot();
   try { pages = await MovePage(id, delta); } catch { pages = await Pages(); renderPages(); }
 }
 
 // Moves the placeholder to where the pointer says, animating the pages that make room (FLIP).
 function placeAt(x, y) {
   const grid = $('pages');
-  const others = [...grid.children].filter((c) => c !== drag.card);
+  const others = cardsOf().filter((c) => c !== drag.card);
   if (!others.length) return;
   let best = null, bestD = Infinity;
   for (const c of others) {
@@ -533,7 +703,8 @@ window.addEventListener('pointerup', async () => {
   if (!drag) return;
   if (!drag.active) { drag = null; return; }
   const id = drag.id;
-  const index = [...$('pages').children].indexOf(drag.card);
+  const index = cardsOf().indexOf(drag.card);
+  syncSlot();
   justDragged = true;
   setTimeout(() => { justDragged = false; }, 0); // only the click straight after the drop is swallowed
   cancelDrag(false);
@@ -571,18 +742,30 @@ document.addEventListener('click', (ev) => {
 // dragging moves the page, a double click toggles between fit and zoomed, and the arrow keys flip through the pages.
 
 const VIEW_ICON = {
-  left: GLYPH.left, right: GLYPH.right,
+  // chevrons whose bounding box is centred in the 24 x 24 box (the small card arrows use GLYPH, which is off by half a unit)
+  left: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
+  right: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 6.5 11 11m0-11-11 11"/></svg>',
   plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg>',
   minus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12h13"/></svg>',
   fit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M19.5 15v4.5H15M9 19.5H4.5V15"/></svg>',
+  rotL: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 1 0 2.1-5M5 4.8v3.6h3.6"/></svg>',
+  rotR: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5M19 4.8v3.6h-3.6"/></svg>',
 };
 
-let view = null; // {idx, s, x, y, fit, nw, nh, drag, hintTimer}
+let view = null; // {idx, s, x, y, fit, nw, nh, ang, drag, hintTimer}
+// Quarter turns (0-3, clockwise) per page, only for looking at it in the viewer: the page itself is never changed.
+const viewTurns = new Map();
 
 const vStage = () => $('viewer').querySelector('.stage');
 const vImg = () => $('viewer').querySelector('.stage img');
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+// The size the page has on the screen: width and height swap when it is turned a quarter.
+function shown() {
+  const odd = Math.round(view.ang / 90) % 2 !== 0;
+  return odd ? {w: view.nh, h: view.nw} : {w: view.nw, h: view.nh};
+}
 
 function viewerBounds() {
   const r = vStage().getBoundingClientRect();
@@ -592,15 +775,19 @@ function viewerBounds() {
 // Keeps the page on the screen: smaller than the window it is centred, bigger it cannot leave a gap.
 function constrain() {
   const b = viewerBounds();
-  const w = view.nw * view.s, h = view.nh * view.s;
+  const sz = shown();
+  const w = sz.w * view.s, h = sz.h * view.s;
   view.x = w <= b.w ? (b.w - w) / 2 : clamp(view.x, b.w - w, 0);
   view.y = h <= b.h ? (b.h - h) / 2 : clamp(view.y, b.h - h, 0);
 }
 
 function applyView(smooth) {
   const img = vImg();
-  img.style.transition = smooth ? 'transform .22s cubic-bezier(.2,.8,.2,1)' : 'none';
-  img.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.s})`;
+  img.style.transition = smooth ? 'transform .3s cubic-bezier(.2,.8,.2,1)' : 'none';
+  // the page turns about its own centre; the offset keeps the turned page's top-left corner at (x, y)
+  const sz = shown();
+  const ox = view.x - view.s * (view.nw - sz.w) / 2, oy = view.y - view.s * (view.nh - sz.h) / 2;
+  img.style.transform = `translate(${ox}px, ${oy}px) scale(${view.s}) translate(${view.nw / 2}px, ${view.nh / 2}px) rotate(${view.ang}deg) translate(${-view.nw / 2}px, ${-view.nh / 2}px)`;
   const pct = Math.round(view.s / view.fit * 100);
   $('viewer').querySelector('.pct').textContent = `${pct}%`;
   $('viewer').classList.toggle('zoomed', view.s > view.fit * 1.001);
@@ -624,7 +811,8 @@ function zoomBy(factor, px, py, smooth) {
 
 function fitView(smooth) {
   const b = viewerBounds();
-  view.fit = Math.min((b.w - 120) / view.nw, (b.h - 150) / view.nh);
+  const sz = shown();
+  view.fit = Math.min((b.w - 120) / sz.w, (b.h - 150) / sz.h);
   view.s = view.fit;
   view.x = view.y = 0;
   constrain();
@@ -635,6 +823,8 @@ function showPage(idx, from) {
   const p = pages[idx];
   view.idx = idx;
   view.nw = p.width; view.nh = p.height;
+  const turns = viewTurns.get(p.id) || 0;
+  view.ang = turns * 90;
   const img = vImg();
   img.width = p.width; img.height = p.height;
   img.src = `/page/${p.id}.jpg`;
@@ -644,7 +834,8 @@ function showPage(idx, from) {
   fitView(false);
   if (from) { // grow out of the thumbnail that was clicked
     const b = viewerBounds(), r = from.getBoundingClientRect();
-    const target = {x: view.x, y: view.y, s: view.s};
+    const target = {x: view.x, y: view.y, s: view.s, ang: view.ang};
+    view.ang = 0; // a page that was turned before turns as it grows out of the thumbnail
     view.s = r.width / p.width;
     view.x = r.left - b.left; view.y = r.top - b.top;
     applyView(false);
@@ -666,6 +857,9 @@ function openViewer(id, thumb) {
       <span class="pct">100%</span>
       <button data-v="in" title="Zoom in (+)" aria-label="Zoom in">${VIEW_ICON.plus}</button>
       <button data-v="fit" title="Fit to window (0)" aria-label="Fit to window">${VIEW_ICON.fit}</button>
+      <span class="sep"></span>
+      <button data-v="rotl" title="Rotate left, for viewing only (Shift+R)" aria-label="Rotate left">${VIEW_ICON.rotL}</button>
+      <button data-v="rotr" title="Rotate right, for viewing only (R)" aria-label="Rotate right">${VIEW_ICON.rotR}</button>
     </div>
     <div class="bar right"><button data-v="close" title="Close (Esc)" aria-label="Close">${VIEW_ICON.close}</button></div>
     <button class="nav prev" data-v="prev" title="Previous page (←)" aria-label="Previous page">${VIEW_ICON.left}</button>
@@ -673,7 +867,7 @@ function openViewer(id, thumb) {
     <div class="hint">Scroll to zoom · drag to move · double-click to fit or zoom in</div>`;
   el.hidden = false;
   el.classList.remove('closing');
-  view = {idx, s: 1, x: 0, y: 0, fit: 1, nw: 1, nh: 1, drag: null};
+  view = {idx, s: 1, x: 0, y: 0, fit: 1, nw: 1, nh: 1, ang: 0, drag: null};
   requestAnimationFrame(() => el.classList.add('open'));
   showPage(idx, thumb);
   clearTimeout(view.hintTimer);
@@ -689,6 +883,13 @@ function closeViewer() {
   setTimeout(() => { if (!view) { el.hidden = true; el.innerHTML = ''; } }, 180);
 }
 
+// Turns the page in the viewer by a quarter. Only the view changes, not the page or the PDF.
+function rotateView(dir) {
+  view.ang += dir * 90;
+  viewTurns.set(pages[view.idx].id, (((view.ang / 90) % 4) + 4) % 4);
+  fitView(true);
+}
+
 function flip2(delta) {
   const i = view.idx + delta;
   if (i >= 0 && i < pages.length) showPage(i);
@@ -702,6 +903,8 @@ $('viewer').addEventListener('click', (ev) => {
   else if (a === 'in') zoomBy(1.4, null, null, true);
   else if (a === 'out') zoomBy(1 / 1.4, null, null, true);
   else if (a === 'fit') fitView(true);
+  else if (a === 'rotl') rotateView(-1);
+  else if (a === 'rotr') rotateView(1);
   else if (a === 'prev') flip2(-1);
   else if (a === 'next') flip2(1);
 });
@@ -770,6 +973,7 @@ document.addEventListener('keydown', (ev) => {
   else if (ev.key === '+' || ev.key === '=') zoomBy(1.4, null, null, true);
   else if (ev.key === '-') zoomBy(1 / 1.4, null, null, true);
   else if (ev.key === '0') fitView(true);
+  else if (ev.key === 'r' || ev.key === 'R') rotateView(ev.shiftKey ? -1 : 1);
 }, true);
 // the page being viewed was deleted or the list changed under it: close rather than show something stale
 EventsOn('pages', (list) => { if (view && !(list || []).some((p) => p.id === pages[view.idx]?.id)) closeViewer(); });

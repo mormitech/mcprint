@@ -155,3 +155,5 @@ h1 { display:flex; align-items:center; gap:9px; } .logo-sm { height:20px; width:
 #viewer button.nav.prev:hover:not(:disabled) svg { transform:translateX(-2px); } #viewer button.nav.next:hover:not(:disabled) svg { transform:translateX(2px); }
 #viewer button.nav:active:not(:disabled) { transform:translateY(-50%) scale(.96); }
 #viewer button.nav:disabled { opacity:0; pointer-events:none; } /* no page that way: the button goes away */
+
+body.dragging .ins { display:none; }

@@ -273,7 +273,7 @@ function renderPages(morph = false) {
     ghost.classList.add('morph-out');
     Object.assign(ghost.style, {left: `${r.left - g.left}px`, top: `${r.top - g.top}px`, width: `${r.width}px`, height: `${r.height}px`});
   }
-  const before = new Map([...grid.children].filter((c) => c.dataset.id).map((c) => [c.dataset.id, c.getBoundingClientRect()]));
+  const before = new Map([...grid.children].filter((c) => c.dataset.id).map((c) => [c.dataset.id, {left: c.offsetLeft, top: c.offsetTop}]));
   if (insertAt !== null && (!pages.length || insertAt > pages.length)) insertAt = pages.length ? pages.length : null;
   renderControls();
   renderBar();
@@ -297,7 +297,7 @@ function renderPages(morph = false) {
   for (const c of cardsOf()) {
     const a = before.get(c.dataset.id);
     if (!a) continue;
-    const b = c.getBoundingClientRect(), dx = a.left - b.left, dy = a.top - b.top;
+    const dx = a.left - c.offsetLeft, dy = a.top - c.offsetTop;
     if (dx || dy) c.animate([{transform: `translate(${dx}px, ${dy}px)`}, {transform: 'none'}], {duration: 260, easing: EASE});
   }
   for (const c of cardsOf()) {
@@ -581,6 +581,9 @@ function renumber() {
 function flip(mutate, lift) {
   const grid = $('pages');
   const before = new Map([...grid.children].map((c) => [c, c.getBoundingClientRect()]));
+  // stop animations that are still running now that their starting points are known, so the new positions are
+  // measured without them (otherwise a card that is mid-slide ends up with a wrong start and jumps)
+  for (const c of grid.children) c.getAnimations().forEach((an) => an.cancel());
   mutate();
   for (const c of grid.children) {
     const a = before.get(c), b = c.getBoundingClientRect();
@@ -643,24 +646,38 @@ async function moveCard(id, delta) {
   try { pages = await MovePage(id, delta); } catch { pages = await Pages(); renderPages(); }
 }
 
+// Where a card sits in the grid, ignoring any animation that is moving it right now. Judging by the animated position
+// made the drag flip-flop: a card still sliding away from under the pointer looked like the one to drop next to.
+function slotRect(c) {
+  const g = $('pages').getBoundingClientRect();
+  return {left: g.left + c.offsetLeft, top: g.top + c.offsetTop, right: g.left + c.offsetLeft + c.offsetWidth, bottom: g.top + c.offsetTop + c.offsetHeight, width: c.offsetWidth};
+}
+
 // Moves the placeholder to where the pointer says, animating the pages that make room (FLIP).
+// The row under the pointer is found first, then the place in that row from the pointer's x. (Taking "the card nearest
+// to the pointer" went wrong at the end of the list: in the empty space next to a last page that sits alone on its
+// row, the nearest card is one in the row above, and "below it" meant "drop after it", which changed the layout, which
+// changed the answer again, over and over.)
 function placeAt(x, y) {
   const grid = $('pages');
-  const others = cardsOf().filter((c) => c !== drag.card);
-  if (!others.length) return;
-  let best = null, bestD = Infinity;
-  for (const c of others) {
-    const r = c.getBoundingClientRect();
-    const dx = Math.max(r.left - x, 0, x - r.right), dy = Math.max(r.top - y, 0, y - r.bottom);
-    const d = dx * dx + dy * dy;
-    if (d < bestD) { bestD = d; best = c; }
+  const cards = cardsOf();
+  if (cards.length < 2) return;
+  const rects = new Map(cards.map((c) => [c, slotRect(c)]));
+  const own = rects.get(drag.card);
+  if (x >= own.left && x <= own.right && y >= own.top && y <= own.bottom) return; // still over its own place
+  const rows = [];
+  for (const c of cards) {
+    const r = rects.get(c);
+    let row = rows.find((w) => Math.abs(w.top - r.top) < 2);
+    if (!row) rows.push(row = {top: r.top, bottom: r.bottom, cards: []});
+    row.cards.push(c);
   }
-  const r = best.getBoundingClientRect();
-  // in the same row: left half is before, right half is after; a pointer below the row is after, above is before
-  const after = y > r.bottom ? true : y < r.top ? false : x > r.left + r.width / 2;
-  const ref = after ? best.nextElementSibling : best;
-  if (ref === drag.card) return;
-  if (drag.card.nextElementSibling === ref) return; // already there
+  const gap = (w) => Math.min(Math.abs(y - w.top), Math.abs(y - w.bottom));
+  const row = rows.find((w) => y >= w.top && y <= w.bottom) ?? rows.reduce((a, w) => (gap(w) < gap(a) ? w : a));
+  // in front of the first card whose middle is right of the pointer, else at the end of the row
+  const hit = row.cards.find((c) => x < rects.get(c).left + rects.get(c).width / 2);
+  const ref = hit ?? row.cards.at(-1).nextElementSibling;
+  if (ref === drag.card || drag.card.nextElementSibling === ref) return; // already there
   flip(() => grid.insertBefore(drag.card, ref));
   renumber();
 }

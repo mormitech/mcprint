@@ -6,7 +6,26 @@
     <title>mcprint</title>
 </head>
 <body>
-<div id="app"></div>
+<aside id="side">
+    <h1>mcprint</h1>
+    <div class="row">
+        <h2>Scanners</h2>
+        <button id="search" title="Search the network now">⟳</button>
+    </div>
+    <div id="devices"></div>
+    <form id="add">
+        <input id="addr" placeholder="Add by address, e.g. 192.168.1.20" spellcheck="false">
+        <button>Add</button>
+    </form>
+    <p id="addmsg" class="muted"></p>
+    <p id="ver" class="muted"></p>
+</aside>
+<main>
+    <section id="controls"></section>
+    <section id="pages-bar"></section>
+    <section id="pages"></section>
+</main>
+<div id="viewer" hidden></div>
 <script src="./src/main.js" type="module"></script>
 </body>
 </html>

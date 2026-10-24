@@ -1,15 +1,364 @@
 package main
 
-import "context"
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"image/jpeg"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"mcprint/internal/escl"
+	"mcprint/internal/pdf"
+)
+
+// Page is one scanned page, kept in memory until the user clears it.
+type Page struct {
+	ID     int
+	Data   []byte
+	Width  int
+	Height int
+	DPI    int
+}
+
+// PageView is what the UI gets to know about a page; the image itself is served at /page/<id>.jpg.
+type PageView struct {
+	ID     int `json:"id"`
+	Width  int `json:"width"`
+	Height int `json:"height"`
+	DPI    int `json:"dpi"`
+	Bytes  int `json:"bytes"`
+}
+
+// ScanRequest is a scan started from the UI.
+type ScanRequest struct {
+	GUID string `json:"guid"`
+	escl.Options
+}
+
+// ScanEvent is sent to the UI as the "scan" event.
+type ScanEvent struct {
+	State   string `json:"state"` // scanning, done, cancelled or error
+	Message string `json:"message"`
+	Count   int    `json:"count"` // pages received in this scan
+}
+
+type capsEntry struct {
+	caps *escl.Caps
+	at   time.Time
+}
 
 // App holds the methods the UI calls.
 type App struct {
-	ctx context.Context
+	ctx      context.Context
+	registry *escl.Registry
+	cacheDir string
+	confDir  string
+
+	mu       sync.Mutex
+	caps     map[string]capsEntry
+	pages    []*Page
+	nextID   int
+	cancel   context.CancelFunc // set while a scan runs
+	scanning bool
 }
 
-func NewApp() *App { return &App{} }
+func NewApp() *App {
+	cache, _ := os.UserCacheDir()
+	conf, _ := os.UserConfigDir()
+	return &App{
+		cacheDir: filepath.Join(cache, "mcprint"),
+		confDir:  filepath.Join(conf, "mcprint"),
+		caps:     map[string]capsEntry{},
+		nextID:   1,
+	}
+}
 
-func (a *App) startup(ctx context.Context) { a.ctx = ctx }
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+	a.registry = escl.NewRegistry(filepath.Join(a.cacheDir, "devices.json"), func() {
+		wruntime.EventsEmit(a.ctx, "devices", a.registry.List())
+	})
+	go a.registry.Run(ctx)
+}
 
 // Version is the app version from wails.json.
 func (a *App) Version() string { return version() }
+
+// ---- Devices ------------------------------------------------------------------------------------------------
+
+// Devices lists the known scanners, online ones first. They are also pushed as the "devices" event.
+func (a *App) Devices() []escl.Device { return a.registry.List() }
+
+// Search looks for scanners right now instead of waiting for the next round.
+func (a *App) Search() { a.registry.Search() }
+
+// AddDevice adds a scanner by address, for networks where mDNS does not get through.
+func (a *App) AddDevice(address string) (escl.Device, error) {
+	return a.registry.Add(a.ctx, address)
+}
+
+// RemoveDevice forgets a scanner.
+func (a *App) RemoveDevice(guid string) {
+	a.registry.Remove(guid)
+	a.mu.Lock()
+	delete(a.caps, guid)
+	a.mu.Unlock()
+}
+
+func (a *App) client(guid string) (*escl.Client, error) {
+	d, ok := a.registry.Get(guid)
+	if !ok {
+		return nil, errors.New("unknown scanner")
+	}
+	return escl.NewClient(d.BaseURL())
+}
+
+// capabilities are cached for five minutes.
+func (a *App) capabilities(ctx context.Context, guid string) (*escl.Caps, error) {
+	a.mu.Lock()
+	e, ok := a.caps[guid]
+	a.mu.Unlock()
+	if ok && time.Since(e.at) < 5*time.Minute {
+		return e.caps, nil
+	}
+	c, err := a.client(guid)
+	if err != nil {
+		return nil, err
+	}
+	caps, err := c.Caps(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not read the scanner's capabilities: %w", err)
+	}
+	a.mu.Lock()
+	a.caps[guid] = capsEntry{caps, time.Now()}
+	a.mu.Unlock()
+	return caps, nil
+}
+
+// Capabilities is what the scanner says it can do.
+func (a *App) Capabilities(guid string) (*escl.Caps, error) { return a.capabilities(a.ctx, guid) }
+
+// Choices lists what can be picked for a source of a scanner.
+func (a *App) Choices(guid, source string, duplex bool) (escl.Choices, error) {
+	caps, err := a.capabilities(a.ctx, guid)
+	if err != nil {
+		return escl.Choices{}, err
+	}
+	return caps.Choices(source, duplex)
+}
+
+// Status is the live state of the scanner (idle, processing, feeder loaded or empty).
+func (a *App) Status(guid string) (escl.Status, error) {
+	c, err := a.client(guid)
+	if err != nil {
+		return escl.Status{}, err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+	return c.Status(ctx)
+}
+
+// ---- Scanning -----------------------------------------------------------------------------------------------
+
+func (a *App) emitScan(ev ScanEvent) { wruntime.EventsEmit(a.ctx, "scan", ev) }
+
+func (a *App) emitPages() { wruntime.EventsEmit(a.ctx, "pages", a.Pages()) }
+
+// Scan starts a job and returns at once; the pages arrive one by one as the "pages" event, progress as "scan".
+func (a *App) Scan(req ScanRequest) error {
+	ctx0, cancelCaps := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancelCaps()
+	caps, err := a.capabilities(ctx0, req.GUID)
+	if err != nil {
+		return err
+	}
+	resolved, err := caps.Resolve(req.Options)
+	if err != nil {
+		return err
+	}
+	c, err := a.client(req.GUID)
+	if err != nil {
+		return err
+	}
+
+	a.mu.Lock()
+	if a.scanning {
+		a.mu.Unlock()
+		return errors.New("a scan is already running")
+	}
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.scanning, a.cancel = true, cancel
+	a.mu.Unlock()
+
+	go func() {
+		count := 0
+		a.emitScan(ScanEvent{State: "scanning", Message: "Scanning…"})
+		_, err := c.Scan(ctx, resolved, func(data []byte) {
+			cfg, derr := jpeg.DecodeConfig(bytes.NewReader(data))
+			if derr != nil {
+				return // not an image, ignore
+			}
+			a.mu.Lock()
+			a.pages = append(a.pages, &Page{ID: a.nextID, Data: data, Width: cfg.Width, Height: cfg.Height, DPI: resolved.DPI})
+			a.nextID++
+			a.mu.Unlock()
+			count++
+			a.emitPages()
+			a.emitScan(ScanEvent{State: "scanning", Message: fmt.Sprintf("Scanning… %d page(s)", count), Count: count})
+		})
+		a.mu.Lock()
+		a.scanning, a.cancel = false, nil
+		a.mu.Unlock()
+		cancel()
+		switch {
+		case errors.Is(err, context.Canceled):
+			a.emitScan(ScanEvent{State: "cancelled", Message: "Scan cancelled", Count: count})
+		case err != nil:
+			msg := err.Error()
+			a.emitScan(ScanEvent{State: "error", Message: strings.ToUpper(msg[:1]) + msg[1:], Count: count})
+		default:
+			a.emitScan(ScanEvent{State: "done", Message: fmt.Sprintf("Scanned %d page(s)", count), Count: count})
+		}
+	}()
+	return nil
+}
+
+// CancelScan stops the running scan and deletes its job on the scanner.
+func (a *App) CancelScan() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.cancel != nil {
+		a.cancel()
+	}
+}
+
+// ---- Pages --------------------------------------------------------------------------------------------------
+
+// Pages lists the scanned pages in order.
+func (a *App) Pages() []PageView {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := make([]PageView, 0, len(a.pages))
+	for _, p := range a.pages {
+		out = append(out, PageView{ID: p.ID, Width: p.Width, Height: p.Height, DPI: p.DPI, Bytes: len(p.Data)})
+	}
+	return out
+}
+
+// DeletePage removes one page.
+func (a *App) DeletePage(id int) []PageView {
+	a.mu.Lock()
+	for i, p := range a.pages {
+		if p.ID == id {
+			a.pages = append(a.pages[:i:i], a.pages[i+1:]...)
+			break
+		}
+	}
+	a.mu.Unlock()
+	return a.Pages()
+}
+
+// MovePage moves a page by delta positions (-1 earlier, +1 later).
+func (a *App) MovePage(id, delta int) []PageView {
+	a.mu.Lock()
+	for i, p := range a.pages {
+		if p.ID == id {
+			j := i + delta
+			if j >= 0 && j < len(a.pages) {
+				a.pages[i], a.pages[j] = a.pages[j], a.pages[i]
+			}
+			break
+		}
+	}
+	a.mu.Unlock()
+	return a.Pages()
+}
+
+// ClearPages drops all pages.
+func (a *App) ClearPages() []PageView {
+	a.mu.Lock()
+	a.pages = nil
+	a.mu.Unlock()
+	return a.Pages()
+}
+
+// pageHandler serves /page/<id>.jpg to the UI.
+func (a *App) pageHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/page/"), ".jpg")
+		id, err := strconv.Atoi(name)
+		if err != nil || !strings.HasPrefix(r.URL.Path, "/page/") {
+			http.NotFound(w, r)
+			return
+		}
+		a.mu.Lock()
+		var data []byte
+		for _, p := range a.pages {
+			if p.ID == id {
+				data = p.Data
+			}
+		}
+		a.mu.Unlock()
+		if data == nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(data)
+	})
+}
+
+// ExportPDF asks where to save and writes all pages as one PDF. It returns the path, or "" if the user cancelled.
+func (a *App) ExportPDF() (string, error) {
+	a.mu.Lock()
+	pp := make([]pdf.Page, len(a.pages))
+	for i, p := range a.pages {
+		pp[i] = pdf.Page{JPEG: p.Data, DPI: p.DPI}
+	}
+	a.mu.Unlock()
+	data, err := pdf.Build(pp)
+	if err != nil {
+		return "", err
+	}
+	path, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{
+		Title:           "Save scan as PDF",
+		DefaultFilename: "scan-" + time.Now().Format("20060102-150405") + ".pdf",
+		Filters:         []wruntime.FileFilter{{DisplayName: "PDF (*.pdf)", Pattern: "*.pdf"}},
+	})
+	if err != nil || path == "" {
+		return "", err
+	}
+	if !strings.HasSuffix(strings.ToLower(path), ".pdf") {
+		path += ".pdf"
+	}
+	return path, os.WriteFile(path, data, 0o644)
+}
+
+// ---- Preferences --------------------------------------------------------------------------------------------
+
+// LoadPrefs returns the saved UI preferences (last scanner, settings per scanner) as JSON.
+func (a *App) LoadPrefs() string {
+	data, err := os.ReadFile(filepath.Join(a.confDir, "prefs.json"))
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
+// SavePrefs stores the UI preferences.
+func (a *App) SavePrefs(js string) error {
+	if err := os.MkdirAll(a.confDir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(a.confDir, "prefs.json"), []byte(js), 0o644)
+}

@@ -1,4 +1,4 @@
-# mcprint
+# mcPrint
 
 A platform-independent app for scanning pages of documents (macOS, Windows, Linux). Built like
 [mcdiskfree](https://github.com/mormitech/mcdiskfree): Go + [Wails](https://wails.io), vanilla JS frontend.

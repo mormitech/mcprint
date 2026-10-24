@@ -531,7 +531,7 @@ async function showAbout() {
   document.body.classList.add('about-mode');
   $('about').hidden = false;
   $('about').innerHTML = `<img class="logo" src="${logo}" alt="" width="132">
-    <h1>mcprint</h1>
+    <h1>mcPrint</h1>
     <p class="muted">Version ${esc(await Version())}</p>
     <p>Scan pages of documents from network scanners (eSCL / AirScan) on macOS, Windows and Linux.</p>
     <p class="muted">Free and open source, MIT license. No accounts, no ads, no telemetry.</p>

@@ -49,11 +49,11 @@ func windowFlags(args []string) (info string, about bool) {
 
 func main() {
 	app := NewApp()
-	title, width, height := "mcprint v"+version(), 1440, 800
+	title, width, height := "mcPrint v"+version(), 1440, 800
 	info, about := windowFlags(os.Args[1:])
 	switch {
 	case about:
-		app.mode, title, width, height = "about", "About mcprint", 440, 520
+		app.mode, title, width, height = "about", "About mcPrint", 440, 520
 	case info != "":
 		app.mode, app.infoGUID, title, width, height = "info", info, "Scanner details", 600, 720
 	default:

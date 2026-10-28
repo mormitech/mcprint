@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const out = resolve(import.meta.dirname, '..', 'mock', 'pages');
-const tmp = join(tmpdir(), 'mcprint-mock');
+const tmp = join(tmpdir(), 'mormiprint-mock');
 mkdirSync(out, { recursive: true });
 mkdirSync(tmp, { recursive: true });
 

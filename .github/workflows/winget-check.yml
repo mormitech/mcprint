@@ -45,20 +45,20 @@ jobs:
       - name: Run the installer the way winget does
         shell: pwsh
         run: |
-          $manifest = Get-Content manifest\mormitech.mcprint.installer.yaml -Raw
+          $manifest = Get-Content manifest\mormitech.mormiprint.installer.yaml -Raw
           $url = [regex]::Match($manifest, 'InstallerUrl: (\S+)').Groups[1].Value
           $sha = [regex]::Match($manifest, 'InstallerSha256: (\S+)').Groups[1].Value
-          $exe = Join-Path $env:RUNNER_TEMP 'mcprint-setup.exe'
+          $exe = Join-Path $env:RUNNER_TEMP 'mormiprint-setup.exe'
           Invoke-WebRequest $url -OutFile $exe
           if ((Get-FileHash $exe -Algorithm SHA256).Hash -ne $sha) { throw "installer hash differs from the manifest ($sha)" }
           Write-Host 'installer hash matches the manifest'
           $p = Start-Process $exe -ArgumentList '/SP-','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru
           if (-not $p.WaitForExit(180000)) { throw 'installer did not finish in 3 minutes' }
           if ($p.ExitCode -ne 0) { throw "installer exit code $($p.ExitCode)" }
-          $dir = Join-Path $env:LOCALAPPDATA 'Programs\mcprint'
-          $exe = Join-Path $dir 'mcprint.exe'
-          if (-not (Test-Path $exe)) { throw 'mcprint.exe missing after install' }
-          $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\mcPrint.lnk'
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\mormiprint'
+          $exe = Join-Path $dir 'mormiprint.exe'
+          if (-not (Test-Path $exe)) { throw 'mormiprint.exe missing after install' }
+          $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\mormiPrint.lnk'
           if (-not (Test-Path $lnk)) { throw 'no Start menu entry' }
           Write-Host 'installed silently: app and Start menu entry are there'
           $u = Start-Process (Join-Path $dir 'unins000.exe') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru

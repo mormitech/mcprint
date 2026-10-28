@@ -1,4 +1,4 @@
-<h1 align="center">mcPrint</h1>
+<h1 align="center">mormiPrint</h1>
 
 <p align="center">
   <b>Scan pages of documents from your network scanner.</b><br>
@@ -6,21 +6,21 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/mormitech/mcprint/actions/workflows/build.yml"><img alt="build" src="https://github.com/mormitech/mcprint/actions/workflows/build.yml/badge.svg"></a>
+  <a href="https://github.com/mormitech/mormiprint/actions/workflows/build.yml"><img alt="build" src="https://github.com/mormitech/mormiprint/actions/workflows/build.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="platforms" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg">
   <img alt="status" src="https://img.shields.io/badge/status-early%20preview-orange.svg">
 </p>
 
 <p align="center">
-  <a href="https://mormitech.com/mctools/mcprint/"><img alt="mcPrint main window with a network scanner selected and scanned pages" src="https://mormitech.com/mctools/mcprint/assets/mcprint_01-main.png" width="820"></a>
+  <a href="https://mormitech.com/mctools/mormiprint/"><img alt="mormiPrint main window with a network scanner selected and scanned pages" src="https://mormitech.com/mctools/mormiprint/assets/mormiprint_01-main.png" width="820"></a>
 </p>
 
 ---
 
 ## What it does
 
-mcPrint finds the scanners on your network, lets you pick one, scans from the flatbed or the document feeder, and collects the pages
+mormiPrint finds the scanners on your network, lets you pick one, scans from the flatbed or the document feeder, and collects the pages
 into one PDF. No driver, no vendor software, no account.
 
 - **Finds your scanners.** It looks for eSCL (AirScan) scanners with mDNS (Bonjour) and remembers them, so they are there the moment
@@ -57,25 +57,25 @@ Only network scanners (eSCL / AirScan) are supported. USB-only scanners are not,
 
 ## Install
 
-mcPrint is an **early preview**. Download it from the [latest release](https://github.com/mormitech/mcprint/releases/latest):
+mormiPrint is an **early preview**. Download it from the [latest release](https://github.com/mormitech/mormiprint/releases/latest):
 
 | | |
 |---|---|
-| **macOS** (Apple silicon) | `mcprint-<version>-macos-arm64.zip`: unzip and drag `mcprint.app` to Applications. The app is not notarized, so the first time use **Open Anyway** in System Settings → Privacy & Security. |
-| **Windows** (x64) | `mcprint-setup-<version>-windows-x64.exe`, no admin rights needed (`/VERYSILENT` installs without any window). SmartScreen shows **More info → Run anyway**. There is also a plain `.zip`. |
-| **Linux** (x64) | `mcprint-<version>-linux-x64.tar.gz`: extract and run `mcprint`. You need GTK 3 and WebKitGTK 4.1 (`libgtk-3-0` and `libwebkit2gtk-4.1-0` on Debian and Ubuntu). |
+| **macOS** (Apple silicon) | `mormiprint-<version>-macos-arm64.zip`: unzip and drag `mormiprint.app` to Applications. The app is not notarized, so the first time use **Open Anyway** in System Settings → Privacy & Security. |
+| **Windows** (x64) | `mormiprint-setup-<version>-windows-x64.exe`, no admin rights needed (`/VERYSILENT` installs without any window). SmartScreen shows **More info → Run anyway**. There is also a plain `.zip`. |
+| **Linux** (x64) | `mormiprint-<version>-linux-x64.tar.gz`: extract and run `mormiprint`. You need GTK 3 and WebKitGTK 4.1 (`libgtk-3-0` and `libwebkit2gtk-4.1-0` on Debian and Ubuntu). |
 
 On Windows you can also use [Scoop](https://scoop.sh) (the [mormitech bucket](https://github.com/mormitech/scoop-bucket)):
 
 ```
 scoop bucket add mormitech https://github.com/mormitech/scoop-bucket
-scoop install mcprint
+scoop install mormiprint
 ```
 
 Or with Homebrew (from the [mormitech tap](https://github.com/mormitech/homebrew-tap); on Linux you also need a current Homebrew and the GTK 3 and WebKitGTK 4.1 libraries; upgrade and uninstall use `--cask`):
 
 ```
-brew install mormitech/tap/mcprint   # macOS (Apple silicon) and Linux (x64)
+brew install mormitech/tap/mormiprint   # macOS (Apple silicon) and Linux (x64)
 ```
 
 ### Platform status
@@ -85,17 +85,17 @@ brew install mormitech/tap/mcprint   # macOS (Apple silicon) and Linux (x64)
 | Builds and tests in CI | ✅ | ✅ (installer installed, started and uninstalled on a runner) | ✅ |
 | Used and tried by hand | ✅ (Apple silicon, one Brother scanner) | ✅ (installer) | ⏳ not yet |
 
-Releases are not code-signed. Found a scanner that does not work? [Open an issue](https://github.com/mormitech/mcprint/issues) and say which model it is.
+Releases are not code-signed. Found a scanner that does not work? [Open an issue](https://github.com/mormitech/mormiprint/issues) and say which model it is.
 
 ## Privacy
 
-mcPrint talks to scanners on your local network and to nothing else: it refuses any address that is not a local one, and it
+mormiPrint talks to scanners on your local network and to nothing else: it refuses any address that is not a local one, and it
 sends nothing anywhere (no telemetry, nothing uploaded). It writes three things, which you can delete at any time:
 
 | What | Where (macOS · Windows · Linux) |
 |---|---|
-| Known scanners, last session's pages | `~/Library/Caches/mcprint` · `%LocalAppData%\mcprint` · `~/.cache/mcprint` |
-| Your settings | `~/Library/Application Support/mcprint` · `%AppData%\mcprint` · `~/.config/mcprint` |
+| Known scanners, last session's pages | `~/Library/Caches/mormiprint` · `%LocalAppData%\mormiprint` · `~/.cache/mormiprint` |
+| Your settings | `~/Library/Application Support/mormiprint` · `%AppData%\mormiprint` · `~/.config/mormiprint` |
 
 ## Develop
 
@@ -128,7 +128,7 @@ with `--about` or `--info <scanner id>`.
 scanned or saved:
 
 ```
-mcprint --mock        # the macOS binary is mcprint.app/Contents/MacOS/mcprint; --demo works too
+mormiprint --mock        # the macOS binary is mormiprint.app/Contents/MacOS/mormiprint; --demo works too
 ```
 
 The pages are drawn by `scripts/make-mock.mjs` (committed in `mock/pages`). `--theme dark` (or `light`) forces the look instead of the

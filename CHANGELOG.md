@@ -1,7 +1,18 @@
 # Changelog
 
-All notable changes to mcPrint are listed here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and the versions are the [releases](https://github.com/mormitech/mcprint/releases).
+All notable changes to mormiPrint are listed here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and the versions are the [releases](https://github.com/mormitech/mormiprint/releases).
+
+## 0.8.1 – 2026-10-28
+
+### Changed
+- mcPrint is now **mormiPrint**. The app, the window titles, the installer, the downloads (`mormiprint-<version>-...`) and the
+  repository (github.com/mormitech/mormiprint) carry the new name. The saved session and settings of an older install are kept in a
+  folder of the old name and are not picked up.
+
+### Fixed
+- The windows fit the screen. With a high scaling setting in Windows the main window was bigger than the desktop and its title bar could not
+  be reached; every window, the details, additional info and About windows too, is now cut down to 90% of the screen at start and centred.
 
 ## 0.8.0 – 2026-10-24
 

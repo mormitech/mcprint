@@ -54,7 +54,7 @@ func GUID(announced, host, model string) string {
 	if uuidRe.MatchString(a) {
 		return a
 	}
-	sum := sha1.Sum([]byte("mcprint|" + strings.ToLower(host) + "|" + model))
+	sum := sha1.Sum([]byte("mormiprint|" + strings.ToLower(host) + "|" + model))
 	sum[6] = sum[6]&0x0f | 0x50 // version 5 (name-based)
 	sum[8] = sum[8]&0x3f | 0x80 // RFC 4122 variant
 	h := hex.EncodeToString(sum[:16])

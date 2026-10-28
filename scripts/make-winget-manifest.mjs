@@ -1,6 +1,6 @@
 // Writes the three winget manifest files for a release.
 //   node scripts/make-winget-manifest.mjs [version] [outDir]
-// The files go in microsoft/winget-pkgs under manifests/m/mormitech/mcprint/<version>/ (submitted as a pull request).
+// The files go in microsoft/winget-pkgs under manifests/m/mormitech/mormiprint/<version>/ (submitted as a pull request).
 // winget recognises the Inno Setup installer and runs it silently (/VERYSILENT /SUPPRESSMSGBOXES /NORESTART).
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -9,11 +9,11 @@ import { join, resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const version = process.argv[2] ?? JSON.parse(readFileSync(join(root, 'wails.json'), 'utf8')).info.productVersion;
 const outDir = resolve(process.argv[3] ?? join(root, 'build', 'winget', version));
-const repo = 'mormitech/mcprint';
-const id = 'mormitech.mcprint';
+const repo = 'mormitech/mormiprint';
+const id = 'mormitech.mormiprint';
 const schema = '1.12.0';
 
-const url = `https://github.com/${repo}/releases/download/v${version}/mcprint-setup-${version}-windows-x64.exe`;
+const url = `https://github.com/${repo}/releases/download/v${version}/mormiprint-setup-${version}-windows-x64.exe`;
 const res = await fetch(url);
 if (!res.ok) throw new Error(`${url}: HTTP ${res.status} (is the release published?)`);
 const sha = createHash('sha256').update(Buffer.from(await res.arrayBuffer())).digest('hex').toUpperCase();
@@ -55,13 +55,13 @@ PackageLocale: en-US
 Publisher: mormitech
 PublisherUrl: https://github.com/mormitech
 PublisherSupportUrl: https://github.com/${repo}/issues
-PackageName: mcPrint
+PackageName: mormiPrint
 PackageUrl: https://github.com/${repo}
 License: MIT
 LicenseUrl: https://github.com/${repo}/blob/main/LICENSE
 ShortDescription: Scan pages of documents from network scanners into one PDF.
-Description: mcPrint finds the eSCL (AirScan) scanners on your network, scans from the flatbed or the document feeder, and collects the pages into one PDF. No driver, no vendor software, no account.
-Moniker: mcprint
+Description: mormiPrint finds the eSCL (AirScan) scanners on your network, scans from the flatbed or the document feeder, and collects the pages into one PDF. No driver, no vendor software, no account.
+Moniker: mormiprint
 Tags:
 - airscan
 - escl

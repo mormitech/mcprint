@@ -1,4 +1,4 @@
-module mcprint
+module mormiprint
 
 go 1.25.0
 

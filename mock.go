@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"mcprint/internal/escl"
+	"mormiprint/internal/escl"
 )
 
 // Demo mode (--mock): made-up scanners and already scanned pages, for screenshots. Nothing real is searched,
@@ -129,7 +129,7 @@ func (a *App) enableMock() error {
 	if err != nil {
 		return err
 	}
-	dir, err := os.MkdirTemp("", "mcprint-demo-")
+	dir, err := os.MkdirTemp("", "mormiprint-demo-")
 	if err != nil {
 		return err
 	}

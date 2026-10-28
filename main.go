@@ -41,7 +41,7 @@ func version() string {
 // window) and --about (show the About window)
 // instead of the app. The app starts itself this way, because Wails v2 has one window per process.
 func windowFlags(args []string) (info, extra string, about, mock bool, theme string) {
-	fs := flag.NewFlagSet("mcprint", flag.ContinueOnError)
+	fs := flag.NewFlagSet("mormiprint", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&info, "info", "", "show the details window of this scanner")
 	fs.StringVar(&extra, "extra", "", "show the additional info window of this scanner")
@@ -55,11 +55,11 @@ func windowFlags(args []string) (info, extra string, about, mock bool, theme str
 
 func main() {
 	app := NewApp()
-	title, width, height := "mcPrint v"+version(), 1440, 800
+	title, width, height := "mormiPrint v"+version(), 1440, 800
 	info, extra, about, mock, theme := windowFlags(os.Args[1:])
 	switch {
 	case about:
-		app.mode, title, width, height = "about", "About mcPrint", 440, 520
+		app.mode, title, width, height = "about", "About mormiPrint", 440, 520
 	case info != "":
 		app.mode, app.infoGUID, title, width, height = "info", info, "Scanner details", 600, 720
 	case extra != "":
@@ -72,12 +72,13 @@ func main() {
 
 	if mock {
 		if err := app.enableMock(); err != nil {
-			fmt.Fprintln(os.Stderr, "mcprint:", err)
+			fmt.Fprintln(os.Stderr, "mormiprint:", err)
 			os.Exit(2)
 		}
 	}
 
 	app.theme = theme
+	app.winW, app.winH = width, height
 
 	var appMenuBar *menu.Menu
 	if app.mode == "" { // the small windows have no menu of their own

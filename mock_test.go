@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"mcprint/internal/escl"
+	"mormiprint/internal/escl"
 )
 
 func TestMock(t *testing.T) {

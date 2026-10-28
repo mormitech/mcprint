@@ -17,8 +17,8 @@ import (
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"mcprint/internal/escl"
-	"mcprint/internal/pdf"
+	"mormiprint/internal/escl"
+	"mormiprint/internal/pdf"
 )
 
 // Page is one scanned page, kept in memory until the user clears it.
@@ -68,6 +68,8 @@ type App struct {
 	mu       sync.Mutex
 	caps     map[string]capsEntry
 	icons    map[string]string // the pictures scanners offer of themselves, by scanner
+	winW     int               // the size the window was asked for, before it is fitted to the screen
+	winH     int
 	pages    []*Page
 	nextID   int
 	theme    string     // --theme: light or dark instead of the system's setting
@@ -82,8 +84,8 @@ func NewApp() *App {
 	cache, _ := os.UserCacheDir()
 	conf, _ := os.UserConfigDir()
 	a := &App{
-		cacheDir: filepath.Join(cache, "mcprint"),
-		confDir:  filepath.Join(conf, "mcprint"),
+		cacheDir: filepath.Join(cache, "mormiprint"),
+		confDir:  filepath.Join(conf, "mormiprint"),
 		caps:     map[string]capsEntry{},
 		icons:    map[string]string{},
 		nextID:   1,
@@ -93,7 +95,8 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	if a.mock != nil { // demo mode: the made-up scanners, no searching
+	fitWindow(ctx, a.winW, a.winH) // every window, the small ones too
+	if a.mock != nil {             // demo mode: the made-up scanners, no searching
 		a.registry = a.mock.registry
 		a.registry.SetOnChange(func() { wruntime.EventsEmit(a.ctx, "devices", a.registry.List()) })
 		a.titleWindow(ctx)

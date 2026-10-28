@@ -8,7 +8,7 @@ import (
 )
 
 // The scanned pages survive a restart: each page is a JPEG file and session.json holds their order, in the user's
-// cache folder (~/Library/Caches/mcprint/session, %LocalAppData%\mcprint\session, ~/.cache/mcprint/session).
+// cache folder (~/Library/Caches/mormiprint/session, %LocalAppData%\mormiprint\session, ~/.cache/mormiprint/session).
 
 type sessionPage struct {
 	ID     int `json:"id"`

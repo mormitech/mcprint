@@ -3,6 +3,12 @@
 All notable changes to mormiPrint are listed here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions are the [releases](https://github.com/mormitech/mormiprint/releases).
 
+## 0.8.2 – 2026-10-28
+
+### Changed
+- The name in the header and the About box is shown in two colours, **mormi** and **Print**, as in mormiDiskFree.
+- The window title no longer shows the version; once a scanner is selected it shows its name, as in "mormiPrint – Brother MFC-L2710DN series".
+
 ## 0.8.1 – 2026-10-28
 
 ### Changed

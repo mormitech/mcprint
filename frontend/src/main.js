@@ -3,7 +3,7 @@ import {
   Version, Devices, Capabilities, Mode, ShowInfo, Search, AddDevice, Choices, Scan, Scanning, Pages, DeletePage, MovePage,
   ClearPages, MovePageTo, ExportPDF, LoadPrefs, SavePrefs, Status, Extra, ShowExtra, Icon,
 } from '../wailsjs/go/main/App';
-import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
+import {EventsOn, BrowserOpenURL, WindowSetTitle} from '../wailsjs/runtime/runtime';
 import logo from './assets/mormitech-mark.svg';
 
 const $ = (id) => document.getElementById(id);
@@ -101,6 +101,8 @@ async function setDevices(list) {
 
 async function select(guid) {
   selected = guid;
+  const d = devices.find((x) => x.guid === guid);
+  WindowSetTitle(d ? `mormiPrint – ${d.name}` : 'mormiPrint');
   ready = false;
   choices = null;
   scan = {state: 'idle', message: ''};
@@ -748,7 +750,7 @@ async function showAbout() {
   document.body.classList.add('about-mode');
   $('about').hidden = false;
   $('about').innerHTML = `<img class="logo" src="${logo}" alt="" width="132">
-    <h1>mormiPrint</h1>
+    <h1><span class="wordmark"><span class="wm-mormi">mormi</span><span class="wm-product">Print</span></span></h1>
     <p class="muted">Version ${esc(await Version())}</p>
     <p>Scan pages of documents from network scanners (eSCL / AirScan) on macOS, Windows and Linux.</p>
     <p class="muted">Free and open source, MIT license. No accounts, no ads, no telemetry.</p>

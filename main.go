@@ -20,7 +20,7 @@ import (
 var assets embed.FS
 
 // wails.json is the single source of the version: it ends up in the macOS Info.plist and the Windows file properties,
-// and is read from here for the window title and the UI.
+// and is read from here for the UI.
 //
 //go:embed wails.json
 var projectJSON []byte
@@ -55,7 +55,7 @@ func windowFlags(args []string) (info, extra string, about, mock bool, theme str
 
 func main() {
 	app := NewApp()
-	title, width, height := "mormiPrint v"+version(), 1440, 800
+	title, width, height := "mormiPrint", 1440, 800
 	info, extra, about, mock, theme := windowFlags(os.Args[1:])
 	switch {
 	case about:

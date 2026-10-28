@@ -97,6 +97,18 @@ sends nothing anywhere (no telemetry, nothing uploaded). It writes three things,
 | Known scanners, last session's pages | `~/Library/Caches/mormiprint` · `%LocalAppData%\mormiprint` · `~/.cache/mormiprint` |
 | Your settings | `~/Library/Application Support/mormiprint` · `%AppData%\mormiprint` · `~/.config/mormiprint` |
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+Only Windows builds made by GitHub Actions from this repository are signed, and each release is approved by hand. Signing starts
+once the SignPath application is accepted; until then the Windows builds are unsigned.
+
+- Committers and reviewers: [Peter Jenei](https://github.com/mormitech)
+- Approvers: [Peter Jenei](https://github.com/mormitech)
+
+Privacy policy: [mormitech.com/privacy](https://mormitech.com/privacy/#mormitools). This program will not transfer any information
+to other networked systems unless specifically requested by the user or the person installing or operating it.
+
 ## Develop
 
 ```
